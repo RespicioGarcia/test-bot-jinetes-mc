@@ -1,1 +1,2 @@
-# test-bot-jinetes-mc
+# bot-jinetes-mc
+Bot para el servidor de Jinetes MC
