@@ -292,7 +292,7 @@ class RadarControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="📍 Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
+        @discord.ui.button(label="📍 Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
     async def asignar_posicion(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not radar_abierto_al_publico:
             return await interaction.response.send_message("❌ El radar está cerrado. Se abre 1H antes de la actividad.", ephemeral=True)
@@ -304,28 +304,43 @@ class RadarControlView(discord.ui.View):
         select = discord.ui.Select(placeholder="📍 Elige tu punto de despliegue...", options=opciones)
         
         async def select_callback(sel_interaction: discord.Interaction):
-            await sel_interaction.response.defer(ephemeral=True)
-            
-            zona = sel_interaction.values[0]
-            user_mention = sel_interaction.user.mention
-            canal = sel_interaction.channel
-
-            if zona != "Retirarse":
-                if RADAR_DESPLIEGUE[zona] is not None and RADAR_DESPLIEGUE[zona] != user_mention:
-                    return await sel_interaction.followup.send(f"❌ La posición **{zona}** ya está ocupada por {RADAR_DESPLIEGUE[zona]}.", ephemeral=True)
+            try:
+                # 1. Reconocer la interacción inmediatamente
+                await sel_interaction.response.defer(ephemeral=True)
                 
-                for z, miembro in RADAR_DESPLIEGUE.items():
-                    if miembro == user_mention:
-                        RADAR_DESPLIEGUE[z] = None
-                RADAR_DESPLIEGUE[zona] = user_mention
-                await sel_interaction.followup.send(f"✅ Desplegado en **{zona}**.", ephemeral=True)
-            else:
-                for z, miembro in RADAR_DESPLIEGUE.items():
-                    if miembro == user_mention:
-                        RADAR_DESPLIEGUE[z] = None
-                await sel_interaction.followup.send("❌ Has salido del servicio.", ephemeral=True)
+                zona = sel_interaction.values[0]
+                user_mention = sel_interaction.user.mention
+                canal = sel_interaction.channel
 
-            await actualizar_radar_en_canal(canal)
+                if zona != "Retirarse":
+                    # Verificar si está ocupada por otro
+                    if RADAR_DESPLIEGUE.get(zona) is not None and RADAR_DESPLIEGUE.get(zona) != user_mention:
+                        return await sel_interaction.followup.send(f"❌ La posición **{zona}** ya está ocupada por {RADAR_DESPLIEGUE[zona]}.", ephemeral=True)
+                    
+                    # Limpiar al usuario de cualquier otra zona que tuviera
+                    for z, miembro in list(RADAR_DESPLIEGUE.items()):
+                        if miembro == user_mention:
+                            RADAR_DESPLIEGUE[z] = None
+                    
+                    # Asignar nueva zona
+                    RADAR_DESPLIEGUE[zona] = user_mention
+                    await sel_interaction.followup.send(f"✅ Desplegado en **{zona}**.", ephemeral=True)
+                else:
+                    # Salir del servicio
+                    for z, miembro in list(RADAR_DESPLIEGUE.items()):
+                        if miembro == user_mention:
+                            RADAR_DESPLIEGUE[z] = None
+                    await sel_interaction.followup.send("❌ Has salido del servicio.", ephemeral=True)
+
+                # Actualizar el mapa en el canal
+                await actualizar_radar_en_canal(canal)
+                
+            except Exception as e:
+                print(f"🚨 ERROR CRÍTICO en asignar_posición: {e}")
+                try:
+                    await sel_interaction.followup.send(f"❌ Error interno al procesar tu solicitud.", ephemeral=True)
+                except:
+                    pass
 
         select.callback = select_callback
         view.add_item(select)
