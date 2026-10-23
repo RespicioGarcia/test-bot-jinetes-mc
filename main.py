@@ -400,8 +400,11 @@ async def actualizar_radar_en_canal(canal):
     ultimo_radar_message_id = nuevo_msg.id
 
 async def ejecutar_radar(message):
-    global ultimo_radar_message_id, canal_radar_id
+    global ultimo_radar_message_id, canal_radar_id, radar_abierto_al_publico
     canal_radar_id = message.channel.id
+    
+    # FORZAR APERTURA MANUAL PARA TESTEO
+    radar_abierto_al_publico = True
 
     if ultimo_radar_message_id:
         try:
@@ -409,11 +412,11 @@ async def ejecutar_radar(message):
             await msg_viejo.delete()
         except: pass
 
-    cargar_zonas() # Ahora esto es instantáneo porque usa la caché
+    cargar_zonas()
     nuevo_mapa = generar_mapa_texto()
     nuevo_msg = await message.channel.send(content=nuevo_mapa, view=RadarControlView())
     ultimo_radar_message_id = nuevo_msg.id
-
+    
 # ==========================================
 # 6. COMANDOS SLASH
 # ==========================================
@@ -424,8 +427,11 @@ async def ayuda_slash(interaction: discord.Interaction):
 
 @bot.tree.command(name="radar", description="Desplegar la Central de Operaciones")
 async def radar_slash(interaction: discord.Interaction):
-    global ultimo_radar_message_id, canal_radar_id
+    global ultimo_radar_message_id, canal_radar_id, radar_abierto_al_publico
     canal_radar_id = interaction.channel.id
+    
+    # FORZAR APERTURA MANUAL PARA TESTEO
+    radar_abierto_al_publico = True
 
     if ultimo_radar_message_id:
         try:
