@@ -16,7 +16,7 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 creds = ServiceAccountCredentials.from_json_keyfile_name("/etc/secrets/creds.json", scope)
 client_gsheet = gspread.authorize(creds)
 
-SPREADSHEET_NAME = "Testjinetesmc"
+SPREADSHEET_NAME = "testbotjinetesmc"
 spreadsheet = client_gsheet.open(SPREADSHEET_NAME)
 
 sheet_menu = spreadsheet.worksheet("Menu_Principal")
