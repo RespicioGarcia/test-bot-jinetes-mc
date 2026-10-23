@@ -292,7 +292,7 @@ class RadarControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-        @discord.ui.button(label="📍 Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
+    @discord.ui.button(label="📍 Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
     async def asignar_posicion(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not radar_abierto_al_publico:
             return await interaction.response.send_message("❌ El radar está cerrado. Se abre 1H antes de la actividad.", ephemeral=True)
