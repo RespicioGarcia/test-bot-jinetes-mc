@@ -336,9 +336,10 @@ class RadarControlView(discord.ui.View):
                 await actualizar_radar_en_canal(canal)
                 
             except Exception as e:
-                print(f"🚨 ERROR CRÍTICO en asignar_posición: {e}")
+                error_msg = f"🚨 ERROR: {type(e).__name__}: {e}"
+                print(error_msg)
                 try:
-                    await sel_interaction.followup.send(f"❌ Error interno al procesar tu solicitud.", ephemeral=True)
+                    await sel_interaction.followup.send(f"❌ {error_msg}", ephemeral=True)
                 except:
                     pass
 
