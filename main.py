@@ -28,6 +28,7 @@ sheet_zonas = spreadsheet.worksheet("Config_Radar_Zonas")
 sheet_horarios = spreadsheet.worksheet("Config_Radar_Horarios")
 sheet_general = spreadsheet.worksheet("Config_Radar_General")
 sheet_comandos = spreadsheet.worksheet("Config_Comandos")
+sheet_reclutamiento = spreadsheet.worksheet("Config_Reclutamiento")
 
 # ==========================================
 # 2. VARIABLES GLOBALES Y CACHÉ (OPTIMIZACIÓN)
@@ -45,6 +46,8 @@ CACHE_MENU = []
 CACHE_SUB = []
 CACHE_CONTENIDO = []
 CACHE_CONFIG = {}
+CACHE_RECLUTAMIENTO = {}
+PREGUNTAS_RECLUTAMIENTO = []
 
 def cargar_config_general():
     global CACHE_CONFIG
@@ -79,6 +82,35 @@ def cargar_comandos():
     records = sheet_comandos.get_all_records()
     global COMANDOS_CONFIG
     COMANDOS_CONFIG = {str(row.get('Comando', '')).lower(): row for row in records}
+
+def cargar_config_reclutamiento():
+    global CACHE_RECLUTAMIENTO
+    if not CACHE_RECLUTAMIENTO:
+        records = sheet_reclutamiento.get_all_records()
+        for row in records:
+            clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
+            valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
+            if clave and valor:
+                CACHE_RECLUTAMIENTO[str(row[clave])] = str(row[valor])
+    return CACHE_RECLUTAMIENTO
+
+def cargar_preguntas_reclutamiento():
+    global PREGUNTAS_RECLUTAMIENTO
+    if not PREGUNTAS_RECLUTAMIENTO:
+        records = sheet_reclutamiento.get_all_records()
+        # Filtrar solo filas que tengan "Orden" numérico (las preguntas)
+        preguntas = []
+        for r in records:
+            orden = r.get('Orden', '')
+            if str(orden).isdigit() and int(orden) > 0:
+                preguntas.append(r)
+        preguntas.sort(key=lambda x: int(x.get('Orden', 0)))
+        PREGUNTAS_RECLUTAMIENTO = preguntas
+    return PREGUNTAS_RECLUTAMIENTO
+
+# Carga inicial
+CONFIG_RECLUTAMIENTO = cargar_config_reclutamiento()
+cargar_preguntas_reclutamiento()
 
 # Carga inicial al arrancar el bot
 CONFIG_RADAR = cargar_config_general()
@@ -115,6 +147,40 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     print(f"Error en comando: {error}")
+
+@bot.event
+async def on_guild_channel_create(channel):
+    # Solo actuar en canales de texto
+    if not isinstance(channel, discord.TextChannel):
+        return
+    
+    config = cargar_config_reclutamiento()
+    categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
+    
+    es_ticket = False
+    
+    # Método 1: Por categoría
+    if categoria_id_str and channel.category_id:
+        try:
+            if channel.category_id == int(categoria_id_str):
+                es_ticket = True
+        except:
+            pass
+    
+    # Método 2: Por nombre (backup)
+    if not es_ticket and channel.name.lower().startswith('ticket-'):
+        es_ticket = True
+    
+    if es_ticket:
+        print(f"✅ Canal de ticket detectado: {channel.name}")
+        # Esperar un momento para que Ticket Tool termine de configurar permisos
+        await asyncio.sleep(2)
+        
+        # Obtener el último usuario que escribió (el que creó el ticket)
+        async for message in channel.history(limit=10):
+            if not message.author.bot:
+                await enviar_bienvenida_recluta(channel, message.author)
+                break
 
 # ==========================================
 # 4. MENÚS Y BÚSQUEDA (OPTIMIZADO CON CACHÉ)
@@ -421,6 +487,31 @@ async def ejecutar_radar(message):
 # ==========================================
 # 6. COMANDOS SLASH
 # ==========================================
+
+@bot.tree.command(name="recluta", description="Enviar formulario de ingreso manualmente en un ticket")
+async def recluta_manual(interaction: discord.Interaction, usuario: discord.Member):
+    # Verificar que sea un canal de ticket
+    config = cargar_config_reclutamiento()
+    categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
+    
+    es_ticket = False
+    if categoria_id_str and interaction.channel.category_id:
+        try:
+            if interaction.channel.category_id == int(categoria_id_str):
+                es_ticket = True
+        except:
+            pass
+    
+    if not es_ticket and interaction.channel.name.lower().startswith('ticket-'):
+        es_ticket = True
+    
+    if not es_ticket:
+        return await interaction.response.send_message("❌ Este comando solo funciona en canales de ticket.", ephemeral=True)
+    
+    await interaction.response.send_message("🔄 Enviando bienvenida...", ephemeral=True)
+    await enviar_bienvenida_recluta(interaction.channel, usuario)
+    await interaction.followup.send(f"✅ Bienvenida enviada a {usuario.mention}", ephemeral=True)
+
 @bot.tree.command(name="ayuda", description="Menú interactivo de normas, vestimenta y ayuda")
 async def ayuda_slash(interaction: discord.Interaction):
     view = MainMenuView()
@@ -446,6 +537,140 @@ async def radar_slash(interaction: discord.Interaction):
     nuevo_mapa = generar_mapa_texto()
     nuevo_msg = await interaction.channel.send(content=nuevo_mapa, view=RadarControlView())
     ultimo_radar_message_id = nuevo_msg.id
+
+    # Formulario Reclutamiento
+
+class FormularioReclutaModal(discord.ui.Modal, title="📝 Solicitud de Ingreso"):
+    def __init__(self, preguntas):
+        super().__init__()
+        self.preguntas = preguntas
+        
+        for i, p in enumerate(preguntas):
+            pregunta = p.get('Pregunta', f'Pregunta {i+1}')
+            placeholder = p.get('Placeholder', '')
+            obligatoria = str(p.get('Obligatoria', '')).upper() == 'SI'
+            
+            # Determinar estilo del input
+            estilo = discord.TextStyle.short
+            if 'larga' in str(p.get('Pregunta', '')).lower() or 'motivación' in str(p.get('Pregunta', '')).lower() or 'experiencia' in str(p.get('Pregunta', '')).lower():
+                estilo = discord.TextStyle.paragraph
+            
+            input_field = discord.ui.TextInput(
+                label=f"{pregunta} {'*' if obligatoria else ''}",
+                placeholder=placeholder,
+                required=obligatoria,
+                style=estilo,
+                max_length=1000 if estilo == discord.TextStyle.paragraph else 200
+            )
+            self.add_item(input_field)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        config = cargar_config_reclutamiento()
+        preguntas = cargar_preguntas_reclutamiento()
+        
+        # Construir el embed según configuración
+        embed = discord.Embed(
+            title="📋 SOLICITUD DE INGRESO",
+            color=discord.Color.gold()
+        )
+        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+        embed.timestamp = discord.utils.utcnow()
+        
+        titulo_personalizado = None
+        descripcion_partes = []
+        campos = []
+        
+        for i, (pregunta, respuesta) in enumerate(zip(preguntas, self.children)):
+            ubicacion = str(pregunta.get('Ubicacion', 'CAMPO')).upper()
+            estilo = str(pregunta.get('Estilo', 'Normal')).lower()
+            texto_pregunta = pregunta.get('Pregunta', '')
+            texto_respuesta = respuesta.value
+            
+            # Aplicar estilo markdown
+            if estilo == 'negrita':
+                texto_respuesta = f"**{texto_respuesta}**"
+            elif estilo == 'cursiva':
+                texto_respuesta = f"*{texto_respuesta}*"
+            elif estilo == 'negrita y cursiva':
+                texto_respuesta = f"***{texto_respuesta}***"
+            
+            # Asignar ubicación
+            if ubicacion == 'TITULO':
+                titulo_personalizado = texto_respuesta
+            elif ubicacion == 'DESCRIPCION':
+                descripcion_partes.append(texto_respuesta)
+            else:  # CAMPO
+                campos.append((texto_pregunta, texto_respuesta))
+        
+        # Aplicar título personalizado si existe
+        if titulo_personalizado:
+            embed.title = f"📋 SOLICITUD: {titulo_personalizado}"
+        
+        # Aplicar descripción
+        if descripcion_partes:
+            embed.description = "\n".join(descripcion_partes)
+        
+        # Añadir campos
+        for nombre, valor in campos:
+            embed.add_field(name=nombre, value=valor, inline=False)
+        
+        # Enviar al canal del ticket
+        canal_ticket = interaction.channel
+        await canal_ticket.send(embed=embed)
+        
+        # Enviar a los canales de log
+        canales_log_str = config.get('CANALES_LOG_RECLUTAS', '')
+        if canales_log_str:
+            for canal_id_str in canales_log_str.split(','):
+                try:
+                    canal_id = int(canal_id_str.strip())
+                    canal_log = bot.get_channel(canal_id)
+                    if canal_log:
+                        await canal_log.send(embed=embed)
+                except Exception as e:
+                    print(f"Error al enviar a canal log {canal_id_str}: {e}")
+        
+        # Renombrar canal si hay título personalizado
+        if titulo_personalizado and canal_ticket:
+            try:
+                nuevo_nombre = f"solicitud-{titulo_personalizado.lower().replace(' ', '-')[:20]}"
+                await canal_ticket.edit(name=nuevo_nombre)
+            except Exception as e:
+                print(f"Error al renombrar canal: {e}")
+        
+        await interaction.followup.send("✅ Solicitud enviada correctamente. Un administrador la revisará pronto.", ephemeral=True)
+
+
+class BienvenidaReclutaView(discord.ui.View):
+    def __init__(self, usuario):
+        super().__init__(timeout=None)
+        self.usuario = usuario
+
+    @discord.ui.button(label="📝 Rellenar solicitud de ingreso", style=discord.ButtonStyle.primary, custom_id="recluta:formulario")
+    async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.usuario:
+            return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
+        
+        preguntas = cargar_preguntas_reclutamiento()
+        if not preguntas:
+            return await interaction.response.send_message("❌ No hay preguntas configuradas en el Excel.", ephemeral=True)
+        
+        modal = FormularioReclutaModal(preguntas)
+        await interaction.response.send_modal(modal)
+
+
+async def enviar_bienvenida_recluta(canal, usuario):
+    config = cargar_config_reclutamiento()
+    mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
+    mensaje_final = mensaje_base.replace('{user}', usuario.mention)
+    
+    view = BienvenidaReclutaView(usuario)
+    await canal.send(content=mensaje_final, view=view)
+
+
+
 
 # ==========================================
 # 7. COMANDOS DE PREFIJO
