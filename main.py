@@ -689,8 +689,8 @@ class FormularioReclutaModal(discord.ui.Modal, title="📝 Solicitud de Ingreso"
             except Exception as e:
                 print(f"Error al renombrar canal: {e}")
 
-            # Guardar en Excel
-    guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
+        # Guardar en Excel
+        guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
         
         await interaction.followup.send("✅ Solicitud enviada correctamente. Un administrador la revisará pronto.", ephemeral=True)
 
