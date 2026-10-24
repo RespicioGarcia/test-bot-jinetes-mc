@@ -105,25 +105,7 @@ def cargar_preguntas_reclutamiento():
         PREGUNTAS_RECLUTAMIENTO = preguntas
     return PREGUNTAS_RECLUTAMIENTO
 
-def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
-    try:
-        ahora = datetime.datetime.now(datetime.timezone.utc)
-        fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
-        fila = [
-            fecha_str,
-            usuario.display_name,
-            str(usuario.id),
-            canal.name if canal else 'Desconocido',
-            'Pendiente'
-        ]
-        for pregunta_texto, respuesta_texto in respuestas_completas:
-            fila.append(respuesta_texto)
-        sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
-        print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
-        return True
-    except Exception as e:
-        print(f"🚨 Error al guardar en Excel: {e}")
-        return False
+
 
 # Carga inicial
 CONFIG_RECLUTAMIENTO = cargar_config_reclutamiento()
