@@ -28,7 +28,8 @@ sheet_zonas = spreadsheet.worksheet("Config_Radar_Zonas")
 sheet_horarios = spreadsheet.worksheet("Config_Radar_Horarios")
 sheet_general = spreadsheet.worksheet("Config_Radar_General")
 sheet_comandos = spreadsheet.worksheet("Config_Comandos")
-sheet_reclutamiento = spreadsheet.worksheet("Config_Reclutamiento")
+sheet_recluta_general = spreadsheet.worksheet("Config_Recluta_General")
+sheet_recluta_preguntas = spreadsheet.worksheet("Config_Recluta_Preguntas")
 
 # ==========================================
 # 2. VARIABLES GLOBALES Y CACHÉ (OPTIMIZACIÓN)
@@ -86,7 +87,7 @@ def cargar_comandos():
 def cargar_config_reclutamiento():
     global CACHE_RECLUTAMIENTO
     if not CACHE_RECLUTAMIENTO:
-        records = sheet_reclutamiento.get_all_records()
+        records = sheet_recluta_general.get_all_records()
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
@@ -97,13 +98,8 @@ def cargar_config_reclutamiento():
 def cargar_preguntas_reclutamiento():
     global PREGUNTAS_RECLUTAMIENTO
     if not PREGUNTAS_RECLUTAMIENTO:
-        records = sheet_reclutamiento.get_all_records()
-        # Filtrar solo filas que tengan "Orden" numérico (las preguntas)
-        preguntas = []
-        for r in records:
-            orden = r.get('Orden', '')
-            if str(orden).isdigit() and int(orden) > 0:
-                preguntas.append(r)
+        records = sheet_recluta_preguntas.get_all_records()
+        preguntas = [r for r in records if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0]
         preguntas.sort(key=lambda x: int(x.get('Orden', 0)))
         PREGUNTAS_RECLUTAMIENTO = preguntas
     return PREGUNTAS_RECLUTAMIENTO
