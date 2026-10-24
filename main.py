@@ -734,34 +734,23 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas):
             print(f"Error al renombrar canal: {e}")
     
     def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
-    """Guarda la solicitud completa en la hoja Registro_Reclutas"""
     try:
         ahora = datetime.datetime.now(datetime.timezone.utc)
         fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
-        
-        # Datos fijos (columnas A-E)
         fila = [
-            fecha_str,                              # A: Fecha
-            usuario.display_name,                   # B: Usuario_Discord
-            str(usuario.id),                        # C: ID_Usuario
-            canal.name if canal else 'Desconocido', # D: Canal_Ticket
-            'Pendiente'                             # E: Estado
+            fecha_str,
+            usuario.display_name,
+            str(usuario.id),
+            canal.name if canal else 'Desconocido',
+            'Pendiente'
         ]
-        
-        # Añadir respuestas en las columnas F en adelante (una por cada pregunta)
         for pregunta_texto, respuesta_texto in respuestas_completas:
             fila.append(respuesta_texto)
-        
-        # Añadir la fila al Excel
         sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
-        
-        print(f"✅ Recluta guardado en Excel: {usuario.display_name} ({len(respuestas_completas)} respuestas)")
+        print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
         return True
-        
     except Exception as e:
         print(f"🚨 Error al guardar en Excel: {e}")
-        import traceback
-        traceback.print_exc()
         return False
     
     await interaction.followup.send(
