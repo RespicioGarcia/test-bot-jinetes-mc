@@ -308,7 +308,7 @@ class RadarControlView(discord.ui.View):
                 # 1. Reconocer la interacción inmediatamente
                 await sel_interaction.response.defer(ephemeral=True)
                 
-                zona = sel_interaction.values[0]
+                zona = sel_interaction.data['values'][0]
                 user_mention = sel_interaction.user.mention
                 canal = sel_interaction.channel
 
