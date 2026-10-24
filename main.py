@@ -146,12 +146,19 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_guild_channel_create(channel):
+    print(f"🔔 EVENTO: Se ha creado un canal: {channel.name} (Tipo: {type(channel).__name__})")
+    
     # Solo actuar en canales de texto
     if not isinstance(channel, discord.TextChannel):
+        print(f"️ No es un canal de texto, ignorado.")
         return
     
     config = cargar_config_reclutamiento()
     categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
+    
+    print(f"📋 Categoría configurada en Excel: {categoria_id_str}")
+    print(f"📋 Categoría del canal creado: {channel.category_id}")
+    print(f" Nombre del canal: {channel.name}")
     
     es_ticket = False
     
@@ -160,24 +167,34 @@ async def on_guild_channel_create(channel):
         try:
             if channel.category_id == int(categoria_id_str):
                 es_ticket = True
-        except:
-            pass
+                print(f"✅ Coincide por categoría!")
+        except Exception as e:
+            print(f"⚠️ Error comparando categorías: {e}")
     
     # Método 2: Por nombre (backup)
     if not es_ticket and channel.name.lower().startswith('ticket-'):
         es_ticket = True
+        print(f"✅ Coincide por nombre (empieza con 'ticket-')")
     
     if es_ticket:
         print(f"✅ Canal de ticket detectado: {channel.name}")
         # Esperar un momento para que Ticket Tool termine de configurar permisos
-        await asyncio.sleep(2)
+        await asyncio.sleep(3)
         
         # Obtener el último usuario que escribió (el que creó el ticket)
-        async for message in channel.history(limit=10):
-            if not message.author.bot:
-                await enviar_bienvenida_recluta(channel, message.author)
-                break
-
+        try:
+            async for message in channel.history(limit=20):
+                print(f"🔍 Revisando mensaje de: {message.author.name} (Bot: {message.author.bot})")
+                if not message.author.bot:
+                    print(f"✅ Usuario encontrado: {message.author.name}")
+                    await enviar_bienvenida_recluta(channel, message.author)
+                    break
+            else:
+                print(f"⚠️ No se encontró ningún mensaje de usuario no-bot en el historial.")
+        except Exception as e:
+            print(f"🚨 Error al buscar mensajes: {e}")
+    else:
+        print(f"❌ El canal no es un ticket, ignorado.")
 # ==========================================
 # 4. MENÚS Y BÚSQUEDA (OPTIMIZADO CON CACHÉ)
 # ==========================================
