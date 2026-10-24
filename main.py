@@ -254,29 +254,53 @@ class SearchModal(discord.ui.Modal):
         )
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        query = self.query_input.value.lower()
-        hoja = obtener_hoja_busqueda(self.hoja_nombre)
-        
         try:
-            records = hoja.get_all_records() # Búsquedas sí leen en tiempo real (es lo correcto)
-            resultados = []
-            for r in records:
-                texto_fila = " ".join([str(v) for v in r.values() if v]).lower()
-                if query in texto_fila:
-                    resultados.append(" ".join([str(v) for v in r.values() if v]))
+            print(f" Modal página {self.pagina_actual}/{self.total_paginas} enviado por {interaction.user.name}")
             
-            if not resultados:
-                return await interaction.followup.send(f"❌ No se encontraron resultados para '**{query}**' en {self.categoria_nombre}.")
+            # Recoger respuestas de esta página
+            respuestas_pagina = []
+            for child in self.children:
+                label_limpio = child.label.rstrip(' *').strip()
+                respuestas_pagina.append((label_limpio, child.value))
             
-            embed = discord.Embed(title=f"🔍 Resultados para '{query}'", color=discord.Color.blue())
-            for i, res in enumerate(resultados[:5], 1):
-                embed.add_field(name=f"Coincidencia {i}", value=res, inline=False)
-            if len(resultados) > 5:
-                embed.set_footer(text=f"Mostrando 5 de {len(resultados)} resultados.")
-            await interaction.followup.send(embed=embed, ephemeral=True)
+            todas_las_respuestas = self.respuestas_previas + respuestas_pagina
+            print(f"   ✅ Respuestas recogidas: {len(respuestas_pagina)} campos")
+            
+            if self.pagina_actual < self.total_paginas:
+                # Hay más páginas: abrir siguiente modal
+                siguiente_pagina = self.pagina_actual + 1
+                inicio = (siguiente_pagina - 1) * 5
+                fin = siguiente_pagina * 5
+                preguntas_siguientes = PREGUNTAS_RECLUTAMIENTO[inicio:fin]
+                
+                print(f"   📄 Abriendo página {siguiente_pagina}/{self.total_paginas} con {len(preguntas_siguientes)} preguntas")
+                
+                siguiente_modal = FormularioReclutaModal(
+                    preguntas=preguntas_siguientes,
+                    pagina_actual=siguiente_pagina,
+                    total_paginas=self.total_paginas,
+                    respuestas_previas=todas_las_respuestas
+                )
+                await interaction.response.send_modal(siguiente_modal)
+                print(f"   ✅ Siguiente modal enviado")
+            else:
+                # Última página: construir embed
+                print(f"    Última página, construyendo embed...")
+                await interaction.response.defer(ephemeral=True)
+                await construir_y_enviar_embed(interaction, todas_las_respuestas)
+                print(f"   ✅ Embed enviado correctamente")
+                
         except Exception as e:
-            await interaction.followup.send(f"❌ Error al buscar: {e}", ephemeral=True)
+            print(f"🚨 ERROR EN MODAL on_submit: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                await interaction.response.send_message(
+                    f"❌ Error al procesar el formulario: {e}", 
+                    ephemeral=True
+                )
+            except:
+                pass
 
 class MainMenuView(discord.ui.View):
     def __init__(self):
