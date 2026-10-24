@@ -30,6 +30,7 @@ sheet_general = spreadsheet.worksheet("Config_Radar_General")
 sheet_comandos = spreadsheet.worksheet("Config_Comandos")
 sheet_recluta_general = spreadsheet.worksheet("Config_Recluta_General")
 sheet_recluta_preguntas = spreadsheet.worksheet("Config_Recluta_Preguntas")
+sheet_registro_reclutas = spreadsheet.worksheet("Registro_Reclutas")
 
 # ==========================================
 # 2. VARIABLES GLOBALES Y CACHÉ (OPTIMIZACIÓN)
@@ -103,6 +104,41 @@ def cargar_preguntas_reclutamiento():
         preguntas.sort(key=lambda x: int(x.get('Orden', 0)))
         PREGUNTAS_RECLUTAMIENTO = preguntas
     return PREGUNTAS_RECLUTAMIENTO
+
+def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
+    """Guarda la solicitud completa en la hoja Registro_Reclutas"""
+    try:
+        # Preparar los datos fijos
+        ahora = datetime.datetime.now(datetime.timezone.utc)
+        fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
+        
+        fila = {
+            'Fecha': fecha_str,
+            'Usuario_Discord': usuario.display_name,
+            'ID_Usuario': str(usuario.id),
+            'Canal_Ticket': canal.name if canal else 'Desconocido',
+            'Estado': 'Pendiente'
+        }
+        
+        # Añadir cada respuesta como columna
+        for pregunta_texto, respuesta_texto in respuestas_completas:
+            # Limpiar el nombre de la pregunta para usarlo como columna
+            columna = pregunta_texto.rstrip(' *')[:50]  # Máximo 50 caracteres
+            fila[columna] = respuesta_texto
+        
+        # Añadir la fila al Excel
+        sheet_registro_reclutas.append_row(list(fila.values()), value_input_option='USER_ENTERED')
+        
+        # Actualizar encabezados si es la primera vez
+        if sheet_registro_reclutas.row_count == 1:
+            sheet_registro_reclutas.update([list(fila.keys())], range_name='A1')
+        
+        print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
+        return True
+        
+    except Exception as e:
+        print(f"🚨 Error al guardar en Excel: {e}")
+        return False
 
 # Carga inicial
 CONFIG_RECLUTAMIENTO = cargar_config_reclutamiento()
@@ -652,6 +688,9 @@ class FormularioReclutaModal(discord.ui.Modal, title="📝 Solicitud de Ingreso"
                 await canal_ticket.edit(name=nuevo_nombre)
             except Exception as e:
                 print(f"Error al renombrar canal: {e}")
+
+            # Guardar en Excel
+    guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
         
         await interaction.followup.send("✅ Solicitud enviada correctamente. Un administrador la revisará pronto.", ephemeral=True)
 
