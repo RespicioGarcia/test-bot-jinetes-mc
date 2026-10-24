@@ -589,19 +589,60 @@ async def radar_slash(interaction: discord.Interaction):
 
     # Formulario Reclutamiento
 
-class FormularioReclutaModal(discord.ui.Modal, title="📝 Solicitud de Ingreso"):
-    def __init__(self, preguntas):
-        super().__init__()
-        self.preguntas = preguntas
+# ==========================================
+# FUNCIÓN: GUARDAR RECLUTA EN EXCEL
+# ==========================================
+def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
+    """Guarda la solicitud completa en la hoja Registro_Reclutas"""
+    try:
+        ahora = datetime.datetime.now(datetime.timezone.utc)
+        fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
+        
+        fila = {
+            'Fecha': fecha_str,
+            'Usuario_Discord': usuario.display_name,
+            'ID_Usuario': str(usuario.id),
+            'Canal_Ticket': canal.name if canal else 'Desconocido',
+            'Estado': 'Pendiente'
+        }
+        
+        for pregunta_texto, respuesta_texto in respuestas_completas:
+            columna = pregunta_texto.rstrip(' *')[:50]
+            fila[columna] = respuesta_texto
+        
+        sheet_registro_reclutas.append_row(list(fila.values()), value_input_option='USER_ENTERED')
+        
+        if sheet_registro_reclutas.row_count == 1:
+            sheet_registro_reclutas.update([list(fila.keys())], range_name='A1')
+        
+        print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
+        return True
+        
+    except Exception as e:
+        print(f"🚨 Error al guardar en Excel: {e}")
+        return False
+
+
+# ==========================================
+# CLASE: MODAL DE RECLUTAMIENTO (CON PAGINACIÓN)
+# ==========================================
+class FormularioReclutaModal(discord.ui.Modal):
+    def __init__(self, preguntas, pagina_actual, total_paginas, respuestas_previas=None):
+        self.pagina_actual = pagina_actual
+        self.total_paginas = total_paginas
+        self.respuestas_previas = respuestas_previas or []
+        
+        titulo = f"📝 Solicitud de Ingreso ({pagina_actual}/{total_paginas})"
+        super().__init__(title=titulo)
         
         for i, p in enumerate(preguntas):
             pregunta = p.get('Pregunta', f'Pregunta {i+1}')
             placeholder = p.get('Placeholder', '')
             obligatoria = str(p.get('Obligatoria', '')).upper() == 'SI'
             
-            # Determinar estilo del input
             estilo = discord.TextStyle.short
-            if 'larga' in str(p.get('Pregunta', '')).lower() or 'motivación' in str(p.get('Pregunta', '')).lower() or 'experiencia' in str(p.get('Pregunta', '')).lower():
+            palabras_clave_largas = ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'porque', 'cuéntanos', 'detalla', 'describe']
+            if any(palabra in str(pregunta).lower() for palabra in palabras_clave_largas):
                 estilo = discord.TextStyle.paragraph
             
             input_field = discord.ui.TextInput(
@@ -614,87 +655,104 @@ class FormularioReclutaModal(discord.ui.Modal, title="📝 Solicitud de Ingreso"
             self.add_item(input_field)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        respuestas_pagina = [(child.label.rstrip(' *'), child.value) for child in self.children]
+        todas_las_respuestas = self.respuestas_previas + respuestas_pagina
         
-        config = cargar_config_reclutamiento()
-        preguntas = cargar_preguntas_reclutamiento()
-        
-        # Construir el embed según configuración
-        embed = discord.Embed(
-            title="📋 SOLICITUD DE INGRESO",
-            color=discord.Color.gold()
-        )
-        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-        embed.timestamp = discord.utils.utcnow()
-        
-        titulo_personalizado = None
-        descripcion_partes = []
-        campos = []
-        
-        for i, (pregunta, respuesta) in enumerate(zip(preguntas, self.children)):
-            ubicacion = str(pregunta.get('Ubicacion', 'CAMPO')).upper()
-            estilo = str(pregunta.get('Estilo', 'Normal')).lower()
-            texto_pregunta = pregunta.get('Pregunta', '')
-            texto_respuesta = respuesta.value
+        if self.pagina_actual < self.total_paginas:
+            siguiente_pagina = self.pagina_actual + 1
+            preguntas_siguientes = PREGUNTAS_RECLUTAMIENTO[(siguiente_pagina - 1) * 5 : siguiente_pagina * 5]
             
-            # Aplicar estilo markdown
-            if estilo == 'negrita':
-                texto_respuesta = f"**{texto_respuesta}**"
-            elif estilo == 'cursiva':
-                texto_respuesta = f"*{texto_respuesta}*"
-            elif estilo == 'negrita y cursiva':
-                texto_respuesta = f"***{texto_respuesta}***"
-            
-            # Asignar ubicación
-            if ubicacion == 'TITULO':
-                titulo_personalizado = texto_respuesta
-            elif ubicacion == 'DESCRIPCION':
-                descripcion_partes.append(texto_respuesta)
-            else:  # CAMPO
-                campos.append((texto_pregunta, texto_respuesta))
+            siguiente_modal = FormularioReclutaModal(
+                preguntas=preguntas_siguientes,
+                pagina_actual=siguiente_pagina,
+                total_paginas=self.total_paginas,
+                respuestas_previas=todas_las_respuestas
+            )
+            await interaction.response.send_modal(siguiente_modal)
+        else:
+            await interaction.response.defer(ephemeral=True)
+            await construir_y_enviar_embed(interaction, todas_las_respuestas)
+
+
+# ==========================================
+# FUNCIÓN: CONSTRUIR Y ENVIAR EMBED FINAL
+# ==========================================
+async def construir_y_enviar_embed(interaction, todas_las_respuestas):
+    """Construye el embed final con todas las respuestas de todos los modales"""
+    config = cargar_config_reclutamiento()
+    preguntas = cargar_preguntas_reclutamiento()
+    
+    embed = discord.Embed(
+        title="📋 SOLICITUD DE INGRESO",
+        color=discord.Color.gold()
+    )
+    embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+    embed.timestamp = discord.utils.utcnow()
+    
+    titulo_personalizado = None
+    descripcion_partes = []
+    campos = []
+    
+    for (pregunta_texto, respuesta_texto), pregunta_config in zip(todas_las_respuestas, preguntas):
+        ubicacion = str(pregunta_config.get('Ubicacion', 'CAMPO')).upper()
+        estilo = str(pregunta_config.get('Estilo', 'Normal')).lower()
         
-        # Aplicar título personalizado si existe
-        if titulo_personalizado:
-            embed.title = f"📋 SOLICITUD: {titulo_personalizado}"
+        if estilo == 'negrita':
+            respuesta_texto = f"**{respuesta_texto}**"
+        elif estilo == 'cursiva':
+            respuesta_texto = f"*{respuesta_texto}*"
+        elif estilo == 'negrita y cursiva':
+            respuesta_texto = f"***{respuesta_texto}***"
         
-        # Aplicar descripción
-        if descripcion_partes:
-            embed.description = "\n".join(descripcion_partes)
-        
-        # Añadir campos
-        for nombre, valor in campos:
-            embed.add_field(name=nombre, value=valor, inline=False)
-        
-        # Enviar al canal del ticket
-        canal_ticket = interaction.channel
-        await canal_ticket.send(embed=embed)
-        
-        # Enviar a los canales de log
-        canales_log_str = config.get('CANALES_LOG_RECLUTAS', '')
-        if canales_log_str:
-            for canal_id_str in canales_log_str.split(','):
-                try:
-                    canal_id = int(canal_id_str.strip())
-                    canal_log = bot.get_channel(canal_id)
-                    if canal_log:
-                        await canal_log.send(embed=embed)
-                except Exception as e:
-                    print(f"Error al enviar a canal log {canal_id_str}: {e}")
-        
-        # Renombrar canal si hay título personalizado
-        if titulo_personalizado and canal_ticket:
+        if ubicacion == 'TITULO':
+            titulo_personalizado = respuesta_texto
+        elif ubicacion == 'DESCRIPCION':
+            descripcion_partes.append(respuesta_texto)
+        else:
+            campos.append((pregunta_texto, respuesta_texto))
+    
+    if titulo_personalizado:
+        embed.title = f"📋 SOLICITUD: {titulo_personalizado}"
+    
+    if descripcion_partes:
+        embed.description = "\n".join(descripcion_partes)
+    
+    for nombre, valor in campos:
+        embed.add_field(name=nombre, value=valor, inline=False)
+    
+    canal_ticket = interaction.channel
+    await canal_ticket.send(embed=embed)
+    
+    canales_log_str = config.get('CANALES_LOG_RECLUTAS', '')
+    if canales_log_str:
+        for canal_id_str in canales_log_str.split(','):
             try:
-                nuevo_nombre = f"solicitud-{titulo_personalizado.lower().replace(' ', '-')[:20]}"
-                await canal_ticket.edit(name=nuevo_nombre)
+                canal_id = int(canal_id_str.strip())
+                canal_log = bot.get_channel(canal_id)
+                if canal_log:
+                    await canal_log.send(embed=embed)
             except Exception as e:
-                print(f"Error al renombrar canal: {e}")
+                print(f"Error al enviar a canal log {canal_id_str}: {e}")
+    
+    if titulo_personalizado and canal_ticket:
+        try:
+            nombre_limpio = str(titulo_personalizado).lower().replace(' ', '-')[:20]
+            nuevo_nombre = f"solicitud-{nombre_limpio}"
+            await canal_ticket.edit(name=nuevo_nombre)
+        except Exception as e:
+            print(f"Error al renombrar canal: {e}")
+    
+    guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
+    
+    await interaction.followup.send(
+        "✅ **Solicitud enviada correctamente.** Un administrador la revisará pronto.", 
+        ephemeral=True
+    )
 
-        # Guardar en Excel
-        guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
-        
-        await interaction.followup.send("✅ Solicitud enviada correctamente. Un administrador la revisará pronto.", ephemeral=True)
 
-
+# ==========================================
+# CLASE: VIEW CON BOTÓN DE BIENVENIDA
+# ==========================================
 class BienvenidaReclutaView(discord.ui.View):
     def __init__(self, usuario):
         super().__init__(timeout=None)
@@ -709,10 +767,20 @@ class BienvenidaReclutaView(discord.ui.View):
         if not preguntas:
             return await interaction.response.send_message("❌ No hay preguntas configuradas en el Excel.", ephemeral=True)
         
-        modal = FormularioReclutaModal(preguntas)
+        total_paginas = (len(preguntas) + 4) // 5
+        primera_pagina_preguntas = preguntas[:5]
+        
+        modal = FormularioReclutaModal(
+            preguntas=primera_pagina_preguntas,
+            pagina_actual=1,
+            total_paginas=total_paginas
+        )
         await interaction.response.send_modal(modal)
 
 
+# ==========================================
+# FUNCIÓN: ENVIAR BIENVENIDA AL CANAL
+# ==========================================
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
     mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
@@ -720,7 +788,6 @@ async def enviar_bienvenida_recluta(canal, usuario):
     
     view = BienvenidaReclutaView(usuario)
     await canal.send(content=mensaje_final, view=view)
-
 
 
 
