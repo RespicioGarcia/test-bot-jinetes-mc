@@ -310,43 +310,51 @@ async def on_guild_channel_create(channel):
     sys.stdout.flush()
     
     if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
-        sys.stdout.write(f"✅ ¡ES UN TICKET! Esperando 3s para que Ticket Tool termine...\n")
+        sys.stdout.write(f"✅ ¡ES UN TICKET! Iniciando proceso de detección...\n")
         sys.stdout.flush()
         
-        await asyncio.sleep(3)
+        # Reintentos: Esperar hasta 15 segundos en total
+        max_reintentos = 3
+        tiempo_espera = 5  # segundos entre cada intento
         
-        # Verificar permisos y acceso al canal
-        try:
-            sys.stdout.write(f"🔍 Intentando acceder al historial del canal...\n")
+        for intento in range(1, max_reintentos + 1):
+            sys.stdout.write(f"🔄 Intento {intento}/{max_reintentos}: Esperando {tiempo_espera}s...\n")
             sys.stdout.flush()
+            await asyncio.sleep(tiempo_espera)
             
-            mensajes_encontrados = 0
-            async for message in channel.history(limit=10):
-                mensajes_encontrados += 1
-                sys.stdout.write(f"   📨 Mensaje {mensajes_encontrados}: Autor={message.author.name}, Bot={message.author.bot}\n")
+            try:
+                sys.stdout.write(f"🔍 Buscando mensajes de usuario...\n")
                 sys.stdout.flush()
                 
-                if not message.author.bot:
-                    sys.stdout.write(f"👤 ¡USUARIO NO-BOT ENCONTRADO: {message.author.name} (ID: {message.author.id})!\n")
+                mensajes_encontrados = 0
+                async for message in channel.history(limit=20):
+                    mensajes_encontrados += 1
+                    sys.stdout.write(f"   📨 Mensaje {mensajes_encontrados}: {message.author.name} (Bot={message.author.bot})\n")
                     sys.stdout.flush()
                     
-                    sys.stdout.write(f"📩 Enviando bienvenida...\n")
-                    sys.stdout.flush()
-                    await enviar_bienvenida_recluta(channel, message.author)
-                    sys.stdout.write(f"✅ Bienvenida enviada correctamente.\n")
-                    sys.stdout.flush()
-                    return
-            
-            if mensajes_encontrados == 0:
-                sys.stdout.write(f"⚠️ ADVERTENCIA: No hay NINGÚN mensaje en el canal. Ticket Tool quizás no ha enviado nada aún.\n")
-                sys.stdout.write(f"💡 SOLUCIÓN: El usuario debe escribir algo primero, o usar el comando /recluta manualmente.\n")
-                sys.stdout.flush()
+                    if not message.author.bot:
+                        sys.stdout.write(f"👤 ¡USUARIO ENCONTRADO: {message.author.name}!\n")
+                        sys.stdout.write(f" Enviando bienvenida y formulario...\n")
+                        sys.stdout.flush()
+                        
+                        await enviar_bienvenida_recluta(channel, message.author)
+                        
+                        sys.stdout.write(f"✅ ¡PROCESO COMPLETADO CON ÉXITO!\n")
+                        sys.stdout.flush()
+                        return
                 
-        except Exception as e:
-            sys.stdout.write(f"🚨 ERROR al procesar ticket: {type(e).__name__}: {e}\n")
-            sys.stdout.flush()
-            import traceback
-            traceback.print_exc()
+                if mensajes_encontrados == 0:
+                    sys.stdout.write(f"   ⚠️ Sin mensajes aún. Reintentando...\n")
+                    sys.stdout.flush()
+                    
+            except Exception as e:
+                sys.stdout.write(f"   🚨 Error en intento {intento}: {e}\n")
+                sys.stdout.flush()
+        
+        # Si llegamos aquí, todos los reintentos fallaron
+        sys.stdout.write(f"❌ No se encontró usuario después de {max_reintentos} intentos.\n")
+        sys.stdout.write(f"💡 Usa el comando /recluta @usuario manualmente en el canal.\n")
+        sys.stdout.flush()
 
 @bot.event
 async def on_thread_create(thread):
