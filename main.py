@@ -286,34 +286,39 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_guild_channel_create(channel):
-    print(f"🔔 EVENTO: Se ha creado un canal: {channel.name} (Tipo: {type(channel).__name__})")
+    # LOG EXTREMO: Ver si el evento se dispara
+    print(f"🔔🔔 EVENTO on_guild_channel_create DISPARADO")
+    print(f"   Canal: {channel.name}")
+    print(f"   Tipo: {type(channel).__name__}")
+    print(f"   ID: {channel.id}")
+    print(f"   Categoría: {channel.category_id}")
+    print(f"   Guild: {channel.guild.name if channel.guild else 'N/A'}")
+    
+    # Verificar si es TextChannel
     if not isinstance(channel, discord.TextChannel):
+        print(f"   ⚠️ No es TextChannel, ignorado")
         return
     
-    config = cargar_config_reclutamiento()
-    categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
-    
-    es_ticket = False
-    if categoria_id_str and channel.category_id:
-        try:
-            if str(channel.category_id) == categoria_id_str:
-                es_ticket = True
-        except Exception:
-            pass
-    
-    if not es_ticket and channel.name.lower().startswith('ticket-'):
-        es_ticket = True
-    
-    if es_ticket:
-        print(f"✅ Canal de ticket detectado: {channel.name}")
+    # TU MÉTODO: Comprobar nombre
+    if "ticket" in channel.name.lower():
+        print(f"   ✅ ES TICKET por nombre!")
+        
         await asyncio.sleep(3)
+        
         try:
-            async for message in channel.history(limit=20):
+            async for message in channel.history(limit=10):
                 if not message.author.bot:
+                    print(f"    Usuario encontrado: {message.author.name}")
                     await enviar_bienvenida_recluta(channel, message.author)
                     break
+            else:
+                print("   ⚠️ No hay mensajes de usuarios reales")
         except Exception as e:
-            print(f"🚨 Error al buscar mensajes: {e}")
+            print(f"   🚨 Error: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print(f"   ❌ No es ticket (nombre: {channel.name})")
 
 # ==========================================
 # 4. MENÚS Y BÚSQUEDA
