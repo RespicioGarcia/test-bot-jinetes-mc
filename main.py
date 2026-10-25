@@ -42,7 +42,6 @@ radar_abierto_al_publico = False
 COMANDOS_CONFIG = {}
 PREFIX = "-"
 
-# Variables de caché para evitar leer el Excel constantemente
 CACHE_ZONAS = []
 CACHE_MENU = []
 CACHE_SUB = []
@@ -53,7 +52,7 @@ PREGUNTAS_RECLUTAMIENTO = []
 
 def cargar_config_general():
     global CACHE_CONFIG
-    if not CACHE_CONFIG:  # Solo lee si la caché está vacía
+    if not CACHE_CONFIG:
         records = sheet_general.get_all_records()
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
@@ -64,9 +63,8 @@ def cargar_config_general():
 
 def cargar_zonas():
     global CACHE_ZONAS, RADAR_DESPLIEGUE
-    if not CACHE_ZONAS:  # Solo lee si la caché está vacía
+    if not CACHE_ZONAS:
         CACHE_ZONAS = sheet_zonas.get_all_records()
-    
     zonas_activas = [r for r in CACHE_ZONAS if str(r.get('Activo', '')).upper() == 'SI']
     zonas_activas.sort(key=lambda x: int(x.get('Orden', 0)))
     RADAR_DESPLIEGUE = {z['Zona']: None for z in zonas_activas}
@@ -105,13 +103,9 @@ def cargar_preguntas_reclutamiento():
         PREGUNTAS_RECLUTAMIENTO = preguntas
     return PREGUNTAS_RECLUTAMIENTO
 
-
-
 # Carga inicial
 CONFIG_RECLUTAMIENTO = cargar_config_reclutamiento()
 cargar_preguntas_reclutamiento()
-
-# Carga inicial al arrancar el bot
 CONFIG_RADAR = cargar_config_general()
 cargar_zonas()
 DIAS_ACTIVIDAD, HORAS_ACTIVIDAD = cargar_horarios()
@@ -150,56 +144,36 @@ async def on_command_error(ctx, error):
 @bot.event
 async def on_guild_channel_create(channel):
     print(f"🔔 EVENTO: Se ha creado un canal: {channel.name} (Tipo: {type(channel).__name__})")
-    
-    # Solo actuar en canales de texto
     if not isinstance(channel, discord.TextChannel):
-        print(f"️ No es un canal de texto, ignorado.")
         return
     
     config = cargar_config_reclutamiento()
     categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
     
-    print(f"📋 Categoría configurada en Excel: {categoria_id_str}")
-    print(f"📋 Categoría del canal creado: {channel.category_id}")
-    print(f" Nombre del canal: {channel.name}")
-    
     es_ticket = False
-    
-    # Método 1: Por categoría
     if categoria_id_str and channel.category_id:
         try:
-            if channel.category_id == int(categoria_id_str):
+            if str(channel.category_id) == categoria_id_str:
                 es_ticket = True
-                print(f"✅ Coincide por categoría!")
-        except Exception as e:
-            print(f"⚠️ Error comparando categorías: {e}")
+        except Exception:
+            pass
     
-    # Método 2: Por nombre (backup)
     if not es_ticket and channel.name.lower().startswith('ticket-'):
         es_ticket = True
-        print(f"✅ Coincide por nombre (empieza con 'ticket-')")
     
     if es_ticket:
         print(f"✅ Canal de ticket detectado: {channel.name}")
-        # Esperar un momento para que Ticket Tool termine de configurar permisos
         await asyncio.sleep(3)
-        
-        # Obtener el último usuario que escribió (el que creó el ticket)
         try:
             async for message in channel.history(limit=20):
-                print(f"🔍 Revisando mensaje de: {message.author.name} (Bot: {message.author.bot})")
                 if not message.author.bot:
-                    print(f"✅ Usuario encontrado: {message.author.name}")
                     await enviar_bienvenida_recluta(channel, message.author)
                     break
-            else:
-                print(f"⚠️ No se encontró ningún mensaje de usuario no-bot en el historial.")
         except Exception as e:
             print(f"🚨 Error al buscar mensajes: {e}")
-    else:
-        print(f"❌ El canal no es un ticket, ignorado.")
+
 # ==========================================
-# 4. MENÚS Y BÚSQUEDA (OPTIMIZADO CON CACHÉ)
+# 4. MENÚS Y BÚSQUEDA
 # ==========================================
 def obtener_hoja_busqueda(nombre_hoja):
     mapeo = {
@@ -221,53 +195,29 @@ class SearchModal(discord.ui.Modal):
         )
 
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        query = self.query_input.value.lower()
+        hoja = obtener_hoja_busqueda(self.hoja_nombre)
+        
         try:
-            print(f" Modal página {self.pagina_actual}/{self.total_paginas} enviado por {interaction.user.name}")
+            records = hoja.get_all_records()
+            resultados = []
+            for r in records:
+                texto_fila = " ".join([str(v) for v in r.values() if v]).lower()
+                if query in texto_fila:
+                    resultados.append(" ".join([str(v) for v in r.values() if v]))
             
-            # Recoger respuestas de esta página
-            respuestas_pagina = []
-            for child in self.children:
-                label_limpio = child.label.rstrip(' *').strip()
-                respuestas_pagina.append((label_limpio, child.value))
+            if not resultados:
+                return await interaction.followup.send(f"❌ No se encontraron resultados para '**{query}**' en {self.categoria_nombre}.")
             
-            todas_las_respuestas = self.respuestas_previas + respuestas_pagina
-            print(f"   ✅ Respuestas recogidas: {len(respuestas_pagina)} campos")
-            
-            if self.pagina_actual < self.total_paginas:
-                # Hay más páginas: abrir siguiente modal
-                siguiente_pagina = self.pagina_actual + 1
-                inicio = (siguiente_pagina - 1) * 5
-                fin = siguiente_pagina * 5
-                preguntas_siguientes = PREGUNTAS_RECLUTAMIENTO[inicio:fin]
-                
-                print(f"   📄 Abriendo página {siguiente_pagina}/{self.total_paginas} con {len(preguntas_siguientes)} preguntas")
-                
-                siguiente_modal = FormularioReclutaModal(
-                    preguntas=preguntas_siguientes,
-                    pagina_actual=siguiente_pagina,
-                    total_paginas=self.total_paginas,
-                    respuestas_previas=todas_las_respuestas
-                )
-                await interaction.response.send_modal(siguiente_modal)
-                print(f"   ✅ Siguiente modal enviado")
-            else:
-                # Última página: construir embed
-                print(f"    Última página, construyendo embed...")
-                await interaction.response.defer(ephemeral=True)
-                await construir_y_enviar_embed(interaction, todas_las_respuestas)
-                print(f"   ✅ Embed enviado correctamente")
-                
+            embed = discord.Embed(title=f"🔍 Resultados para '{query}'", color=discord.Color.blue())
+            for i, res in enumerate(resultados[:5], 1):
+                embed.add_field(name=f"Coincidencia {i}", value=res, inline=False)
+            if len(resultados) > 5:
+                embed.set_footer(text=f"Mostrando 5 de {len(resultados)} resultados.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
-            print(f"🚨 ERROR EN MODAL on_submit: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            try:
-                await interaction.response.send_message(
-                    f"❌ Error al procesar el formulario: {e}", 
-                    ephemeral=True
-                )
-            except:
-                pass
+            await interaction.followup.send(f"❌ Error al buscar: {e}", ephemeral=True)
 
 class MainMenuView(discord.ui.View):
     def __init__(self):
@@ -278,7 +228,7 @@ class MainMenuView(discord.ui.View):
         global CACHE_MENU
         if not CACHE_MENU:
             CACHE_MENU = sheet_menu.get_all_records()
-        records = CACHE_MENU # Usa la caché
+        records = CACHE_MENU
         
         items = [r for r in records if str(r.get('Estado', '')) in ['1', '2']]
         items.sort(key=lambda x: int(x.get('Orden', 0)))
@@ -361,7 +311,7 @@ async def ejecutar_menu_ayuda(message):
     await message.channel.send("👋 **SISTEMA DE AYUDA JINETES MC**\nSelecciona una opción del menú desplegable:", view=view)
 
 # ==========================================
-# 5. RADAR (OPTIMIZADO: SIN LEER EXCEL EN EL BUCLE)
+# 5. RADAR
 # ==========================================
 def generar_mapa_texto():
     config = cargar_config_general()
@@ -374,7 +324,6 @@ def generar_mapa_texto():
     lineas_zonas = []
     for zona, usuario in RADAR_DESPLIEGUE.items():
         emoji = "📍"
-        # OPTIMIZACIÓN: Usamos la caché en lugar de sheet_zonas.get_all_records()
         for r in CACHE_ZONAS:
             if r.get('Zona') == zona:
                 emoji = r.get('Emoji', '📍')
@@ -411,36 +360,26 @@ class RadarControlView(discord.ui.View):
         
         async def select_callback(sel_interaction: discord.Interaction):
             try:
-                # 1. Reconocer la interacción inmediatamente
                 await sel_interaction.response.defer(ephemeral=True)
-                
                 zona = sel_interaction.data['values'][0]
                 user_mention = sel_interaction.user.mention
                 canal = sel_interaction.channel
 
                 if zona != "Retirarse":
-                    # Verificar si está ocupada por otro
                     if RADAR_DESPLIEGUE.get(zona) is not None and RADAR_DESPLIEGUE.get(zona) != user_mention:
                         return await sel_interaction.followup.send(f"❌ La posición **{zona}** ya está ocupada por {RADAR_DESPLIEGUE[zona]}.", ephemeral=True)
-                    
-                    # Limpiar al usuario de cualquier otra zona que tuviera
                     for z, miembro in list(RADAR_DESPLIEGUE.items()):
                         if miembro == user_mention:
                             RADAR_DESPLIEGUE[z] = None
-                    
-                    # Asignar nueva zona
                     RADAR_DESPLIEGUE[zona] = user_mention
                     await sel_interaction.followup.send(f"✅ Desplegado en **{zona}**.", ephemeral=True)
                 else:
-                    # Salir del servicio
                     for z, miembro in list(RADAR_DESPLIEGUE.items()):
                         if miembro == user_mention:
                             RADAR_DESPLIEGUE[z] = None
                     await sel_interaction.followup.send("❌ Has salido del servicio.", ephemeral=True)
 
-                # Actualizar el mapa en el canal
                 await actualizar_radar_en_canal(canal)
-                
             except Exception as e:
                 error_msg = f"🚨 ERROR: {type(e).__name__}: {e}"
                 print(error_msg)
@@ -509,8 +448,6 @@ async def actualizar_radar_en_canal(canal):
 async def ejecutar_radar(message):
     global ultimo_radar_message_id, canal_radar_id, radar_abierto_al_publico
     canal_radar_id = message.channel.id
-    
-    # FORZAR APERTURA MANUAL PARA TESTEO
     radar_abierto_al_publico = True
 
     if ultimo_radar_message_id:
@@ -525,19 +462,18 @@ async def ejecutar_radar(message):
     ultimo_radar_message_id = nuevo_msg.id
     
 # ==========================================
-# 6. COMANDOS SLASH
+# 6. COMANDOS SLASH Y RECLUTAMIENTO
 # ==========================================
 
 @bot.tree.command(name="recluta", description="Enviar formulario de ingreso manualmente en un ticket")
 async def recluta_manual(interaction: discord.Interaction, usuario: discord.Member):
-    # Verificar que sea un canal de ticket
     config = cargar_config_reclutamiento()
     categoria_id_str = config.get('CATEGORIA_TICKETS_ID', '')
     
     es_ticket = False
     if categoria_id_str and interaction.channel.category_id:
         try:
-            if interaction.channel.category_id == int(categoria_id_str):
+            if str(interaction.channel.category_id) == categoria_id_str:
                 es_ticket = True
         except:
             pass
@@ -561,8 +497,6 @@ async def ayuda_slash(interaction: discord.Interaction):
 async def radar_slash(interaction: discord.Interaction):
     global ultimo_radar_message_id, canal_radar_id, radar_abierto_al_publico
     canal_radar_id = interaction.channel.id
-    
-    # FORZAR APERTURA MANUAL PARA TESTEO
     radar_abierto_al_publico = True
 
     if ultimo_radar_message_id:
@@ -573,50 +507,35 @@ async def radar_slash(interaction: discord.Interaction):
 
     await interaction.response.send_message("🔄 Sincronizando central...", ephemeral=True)
     cargar_zonas()
-    
     nuevo_mapa = generar_mapa_texto()
     nuevo_msg = await interaction.channel.send(content=nuevo_mapa, view=RadarControlView())
     ultimo_radar_message_id = nuevo_msg.id
 
-    # Formulario Reclutamiento
+# ==========================================
+# 7. LÓGICA DE RECLUTAMIENTO (MODALES Y EXCEL)
+# ==========================================
 
-# ==========================================
-# FUNCIÓN: GUARDAR RECLUTA EN EXCEL
-# ==========================================
 def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
-    """Guarda la solicitud completa en la hoja Registro_Reclutas"""
     try:
         ahora = datetime.datetime.now(datetime.timezone.utc)
         fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
-        
-        fila = {
-            'Fecha': fecha_str,
-            'Usuario_Discord': usuario.display_name,
-            'ID_Usuario': str(usuario.id),
-            'Canal_Ticket': canal.name if canal else 'Desconocido',
-            'Estado': 'Pendiente'
-        }
-        
+        fila = [
+            fecha_str,
+            usuario.display_name,
+            str(usuario.id),
+            canal.name if canal else 'Desconocido',
+            'Pendiente'
+        ]
         for pregunta_texto, respuesta_texto in respuestas_completas:
-            columna = pregunta_texto.rstrip(' *')[:50]
-            fila[columna] = respuesta_texto
+            fila.append(respuesta_texto)
         
-        sheet_registro_reclutas.append_row(list(fila.values()), value_input_option='USER_ENTERED')
-        
-        if sheet_registro_reclutas.row_count == 1:
-            sheet_registro_reclutas.update([list(fila.keys())], range_name='A1')
-        
+        sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
         print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
         return True
-        
     except Exception as e:
         print(f"🚨 Error al guardar en Excel: {e}")
         return False
 
-
-# ==========================================
-# CLASE: MODAL DE RECLUTAMIENTO (CON PAGINACIÓN)
-# ==========================================
 class FormularioReclutaModal(discord.ui.Modal):
     def __init__(self, preguntas, pagina_actual, total_paginas, respuestas_previas=None):
         self.pagina_actual = pagina_actual
@@ -636,8 +555,9 @@ class FormularioReclutaModal(discord.ui.Modal):
             if any(palabra in str(pregunta).lower() for palabra in palabras_clave_largas):
                 estilo = discord.TextStyle.paragraph
             
+            pregunta_limpia = pregunta.rstrip('*').strip()
             input_field = discord.ui.TextInput(
-                label=f"{pregunta} {'*' if obligatoria else ''}",
+                label=f"{pregunta_limpia} {'*' if obligatoria else ''}",
                 placeholder=placeholder,
                 required=obligatoria,
                 style=estilo,
@@ -646,37 +566,35 @@ class FormularioReclutaModal(discord.ui.Modal):
             self.add_item(input_field)
 
     async def on_submit(self, interaction: discord.Interaction):
-        respuestas_pagina = [(child.label.rstrip(' *'), child.value) for child in self.children]
-        todas_las_respuestas = self.respuestas_previas + respuestas_pagina
-        
-        if self.pagina_actual < self.total_paginas:
-            siguiente_pagina = self.pagina_actual + 1
-            preguntas_siguientes = PREGUNTAS_RECLUTAMIENTO[(siguiente_pagina - 1) * 5 : siguiente_pagina * 5]
+        try:
+            respuestas_pagina = [(child.label.rstrip(' *').strip(), child.value) for child in self.children]
+            todas_las_respuestas = self.respuestas_previas + respuestas_pagina
             
-            siguiente_modal = FormularioReclutaModal(
-                preguntas=preguntas_siguientes,
-                pagina_actual=siguiente_pagina,
-                total_paginas=self.total_paginas,
-                respuestas_previas=todas_las_respuestas
-            )
-            await interaction.response.send_modal(siguiente_modal)
-        else:
-            await interaction.response.defer(ephemeral=True)
-            await construir_y_enviar_embed(interaction, todas_las_respuestas)
+            if self.pagina_actual < self.total_paginas:
+                siguiente_pagina = self.pagina_actual + 1
+                inicio = (siguiente_pagina - 1) * 5
+                fin = siguiente_pagina * 5
+                preguntas_siguientes = PREGUNTAS_RECLUTAMIENTO[inicio:fin]
+                
+                siguiente_modal = FormularioReclutaModal(
+                    preguntas=preguntas_siguientes,
+                    pagina_actual=siguiente_pagina,
+                    total_paginas=self.total_paginas,
+                    respuestas_previas=todas_las_respuestas
+                )
+                await interaction.response.send_modal(siguiente_modal)
+            else:
+                await interaction.response.defer(ephemeral=True)
+                await construir_y_enviar_embed(interaction, todas_las_respuestas)
+        except Exception as e:
+            print(f"🚨 ERROR EN MODAL: {e}")
+            await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
-
-# ==========================================
-# FUNCIÓN: CONSTRUIR Y ENVIAR EMBED FINAL
-# ==========================================
 async def construir_y_enviar_embed(interaction, todas_las_respuestas):
-    """Construye el embed final con todas las respuestas de todos los modales"""
     config = cargar_config_reclutamiento()
     preguntas = cargar_preguntas_reclutamiento()
     
-    embed = discord.Embed(
-        title="📋 SOLICITUD DE INGRESO",
-        color=discord.Color.gold()
-    )
+    embed = discord.Embed(title="📋 SOLICITUD DE INGRESO", color=discord.Color.gold())
     embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
     embed.timestamp = discord.utils.utcnow()
     
@@ -728,40 +646,15 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas):
     if titulo_personalizado and canal_ticket:
         try:
             nombre_limpio = str(titulo_personalizado).lower().replace(' ', '-')[:20]
-            nuevo_nombre = f"solicitud-{nombre_limpio}"
-            await canal_ticket.edit(name=nuevo_nombre)
+            await canal_ticket.edit(name=f"solicitud-{nombre_limpio}")
         except Exception as e:
             print(f"Error al renombrar canal: {e}")
     
-    def guardar_recluta_en_excel(usuario, canal, respuestas_completas):
-    try:
-        ahora = datetime.datetime.now(datetime.timezone.utc)
-        fecha_str = ahora.strftime('%d/%m/%Y %H:%M')
-        fila = [
-            fecha_str,
-            usuario.display_name,
-            str(usuario.id),
-            canal.name if canal else 'Desconocido',
-            'Pendiente'
-        ]
-        for pregunta_texto, respuesta_texto in respuestas_completas:
-            fila.append(respuesta_texto)
-        sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
-        print(f"✅ Recluta guardado en Excel: {usuario.display_name}")
-        return True
-    except Exception as e:
-        print(f"🚨 Error al guardar en Excel: {e}")
-        return False
+    # Guardar en Excel
+    guardar_recluta_en_excel(interaction.user, canal_ticket, todas_las_respuestas)
     
-    await interaction.followup.send(
-        "✅ **Solicitud enviada correctamente.** Un administrador la revisará pronto.", 
-        ephemeral=True
-    )
+    await interaction.followup.send("✅ **Solicitud enviada correctamente.** Un administrador la revisará pronto.", ephemeral=True)
 
-
-# ==========================================
-# CLASE: VIEW CON BOTÓN DE BIENVENIDA
-# ==========================================
 class BienvenidaReclutaView(discord.ui.View):
     def __init__(self, usuario):
         super().__init__(timeout=None)
@@ -786,28 +679,20 @@ class BienvenidaReclutaView(discord.ui.View):
         )
         await interaction.response.send_modal(modal)
 
-
-# ==========================================
-# FUNCIÓN: ENVIAR BIENVENIDA AL CANAL
-# ==========================================
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
     mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
     mensaje_final = mensaje_base.replace('{user}', usuario.mention)
-    
     view = BienvenidaReclutaView(usuario)
     await canal.send(content=mensaje_final, view=view)
 
-
-
 # ==========================================
-# 7. COMANDOS DE PREFIJO
+# 8. COMANDOS DE PREFIJO Y CRONOGRAMA
 # ==========================================
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
-    
     if not message.content.startswith(PREFIX):
         return
 
@@ -816,20 +701,14 @@ async def on_message(message):
         return
 
     comando_nombre = args[0].lower()
-    
     if comando_nombre in COMANDOS_CONFIG:
         config = COMANDOS_CONFIG[comando_nombre]
         if str(config.get('Activo', '')).upper() == 'SI':
             funcion = config.get('Funcion', '')
-            
             if funcion == 'menu_ayuda':
                 await ejecutar_menu_ayuda(message)
             elif funcion == 'radar_geto':
                 await ejecutar_radar(message)
-
-# ==========================================
-# 8. CRONOGRAMA RADAR
-# ==========================================
 
 @tasks.loop(seconds=30)
 async def verificador_tiempo_radar():
@@ -849,11 +728,8 @@ async def verificador_tiempo_radar():
     minuto = ahora.minute
 
     if dia_semana in DIAS_ACTIVIDAD:
-        # APERTURA: Verificar si estamos dentro del rango de apertura
         for h in HORAS_ACTIVIDAD:
             h_apertura = h - 1 if h > 0 else 23
-            
-            # Si es la hora de apertura y estamos en los primeros 5 minutos
             if hora == h_apertura and minuto < 5 and not radar_abierto_al_publico:
                 radar_abierto_al_publico = True
                 try:
@@ -865,7 +741,6 @@ async def verificador_tiempo_radar():
                     print(f"Error al abrir radar: {e}")
                 break
         
-        # CIERRE: 5 minutos después de la hora de actividad
         for h in HORAS_ACTIVIDAD:
             if hora == h and minuto == 5:
                 if radar_abierto_al_publico or any(RADAR_DESPLIEGUE.values()):
@@ -889,9 +764,6 @@ async def verificador_tiempo_radar():
                         print(f"Error al cerrar radar: {e}")
                     break
 
-# ==========================================
-# 9. PING MANTENIMIENTO
-# ==========================================
 @tasks.loop(minutes=5)
 async def ping_keeping_alive():
     try:
@@ -903,7 +775,7 @@ async def ping_keeping_alive():
         print(f"Error en ping: {e}")
 
 # ==========================================
-# 10. SERVIDOR WEB + RECONEXIÓN
+# 9. SERVIDOR WEB + RECONEXIÓN
 # ==========================================
 server_app = Flask(__name__)
 
@@ -924,7 +796,6 @@ def run_web():
 
 threading.Thread(target=run_web, daemon=True).start()
 
-# Bucle principal con reconexión automática
 while True:
     try:
         bot.run(os.getenv("DISCORD_TOKEN"), reconnect=True)
