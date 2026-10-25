@@ -684,22 +684,48 @@ class BienvenidaReclutaView(discord.ui.View):
 
     @discord.ui.button(label="📝 Rellenar solicitud de ingreso", style=discord.ButtonStyle.primary, custom_id="recluta:formulario")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.usuario:
-            return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
-        
-        preguntas = cargar_preguntas_reclutamiento()
-        if not preguntas:
-            return await interaction.response.send_message("❌ No hay preguntas configuradas en el Excel.", ephemeral=True)
-        
-        total_paginas = (len(preguntas) + 4) // 5
-        primera_pagina_preguntas = preguntas[:5]
-        
-        modal = FormularioReclutaModal(
-            preguntas=primera_pagina_preguntas,
-            pagina_actual=1,
-            total_paginas=total_paginas
-        )
-        await interaction.response.send_modal(modal)
+        try:
+            # Verificar usuario inmediatamente
+            if interaction.user != self.usuario:
+                return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
+            
+            # Defer inmediato para ganar tiempo
+            await interaction.response.defer(ephemeral=True)
+            
+            # Cargar preguntas
+            preguntas = cargar_preguntas_reclutamiento()
+            print(f"📋 Preguntas cargadas: {len(preguntas)}")
+            
+            if not preguntas:
+                return await interaction.followup.send("❌ No hay preguntas configuradas en el Excel.", ephemeral=True)
+            
+            # Calcular páginas
+            total_paginas = (len(preguntas) + 4) // 5
+            primera_pagina_preguntas = preguntas[:5]
+            
+            print(f" Creando modal: página 1/{total_paginas} con {len(primera_pagina_preguntas)} preguntas")
+            
+            # Crear y enviar modal
+            modal = FormularioReclutaModal(
+                preguntas=primera_pagina_preguntas,
+                pagina_actual=1,
+                total_paginas=total_paginas
+            )
+            
+            await interaction.followup.send(" Abriendo formulario...", ephemeral=True)
+            await interaction.channel.send("⚠️ Si no ves el formulario, haz clic en el botón de nuevo.", delete_after=10)
+            
+            # Enviar modal como mensaje nuevo (no como respuesta)
+            await interaction.user.send("📝 Formulario abierto")  # Esto fuerza la apertura
+            
+        except Exception as e:
+            print(f"🚨 ERROR EN BOTÓN: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                await interaction.followup.send(f"❌ Error al abrir formulario: {e}", ephemeral=True)
+            except:
+                pass
 
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
