@@ -285,64 +285,69 @@ intents = discord.Intents.all()
 intents.message_content = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
+import sys  # Asegúrate de que esta línea esté al principio de tu archivo, junto a los otros imports
+
 @bot.event
 async def on_ready():
-    print(f"✅ Bot Jinetes MC listo. Prefijo: '{PREFIX}'")
-    await bot.tree.sync()
-    if not verificador_tiempo_radar.is_running():
-        verificador_tiempo_radar.start()
-    if not ping_keeping_alive.is_running():
-        ping_keeping_alive.start()
-
-@bot.event
-async def on_disconnect():
-    print("⚠️ Bot desconectado de Discord. Intentando reconectar...")
-
-@bot.event
-async def on_resumed():
-    print("✅ Bot reconectado a Discord.")
-
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return
-    print(f"Error en comando: {error}")
+    sys.stdout.write("🚀 " + "="*50 + "\n")
+    sys.stdout.write(f"✅ Bot Jinetes MC CONECTADO\n")
+    sys.stdout.write(f"👤 Usuario: {bot.user.name} (ID: {bot.user.id})\n")
+    sys.stdout.write(f"📌 Prefijo: '{PREFIX}'\n")
+    sys.stdout.write("🚀 " + "="*50 + "\n")
+    sys.stdout.flush()
+    
+    try:
+        await bot.tree.sync()
+        sys.stdout.write("✅ Comandos slash sincronizados.\n")
+        sys.stdout.flush()
+    except Exception as e:
+        sys.stdout.write(f"🚨 Error en sync: {e}\n")
+        sys.stdout.flush()
 
 @bot.event
 async def on_guild_channel_create(channel):
-    # LOG EXTREMO: Ver si el evento se dispara
-    print(f"🔔🔔 EVENTO on_guild_channel_create DISPARADO")
-    print(f"   Canal: {channel.name}")
-    print(f"   Tipo: {type(channel).__name__}")
-    print(f"   ID: {channel.id}")
-    print(f"   Categoría: {channel.category_id}")
-    print(f"   Guild: {channel.guild.name if channel.guild else 'N/A'}")
+    sys.stdout.write(f"🔔 [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__} | ID: {channel.id}\n")
+    sys.stdout.flush()
     
-    # Verificar si es TextChannel
-    if not isinstance(channel, discord.TextChannel):
-        print(f"   ⚠️ No es TextChannel, ignorado")
-        return
-    
-    # TU MÉTODO: Comprobar nombre
-    if "ticket" in channel.name.lower():
-        print(f"   ✅ ES TICKET por nombre!")
-        
+    if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
+        sys.stdout.write(f"✅ ¡ES UN TICKET! Procesando...\n")
+        sys.stdout.flush()
         await asyncio.sleep(3)
-        
         try:
             async for message in channel.history(limit=10):
                 if not message.author.bot:
-                    print(f"    Usuario encontrado: {message.author.name}")
+                    sys.stdout.write(f"👤 Usuario encontrado: {message.author.name}\n")
+                    sys.stdout.flush()
                     await enviar_bienvenida_recluta(channel, message.author)
                     break
-            else:
-                print("   ⚠️ No hay mensajes de usuarios reales")
         except Exception as e:
-            print(f"   🚨 Error: {e}")
-            import traceback
-            traceback.print_exc()
-    else:
-        print(f"   ❌ No es ticket (nombre: {channel.name})")
+            sys.stdout.write(f"🚨 Error al procesar ticket: {e}\n")
+            sys.stdout.flush()
+
+@bot.event
+async def on_thread_create(thread):
+    sys.stdout.write(f"🧵 [HILO CREADO] Nombre: '{thread.name}' | Tipo: {type(thread).__name__}\n")
+    sys.stdout.flush()
+    if "ticket" in thread.name.lower():
+        sys.stdout.write(f"✅ ¡ES UN HILO DE TICKET! Procesando...\n")
+        sys.stdout.flush()
+        await asyncio.sleep(3)
+        try:
+            async for message in thread.history(limit=10):
+                if not message.author.bot:
+                    sys.stdout.write(f"👤 Usuario encontrado en hilo: {message.author.name}\n")
+                    sys.stdout.flush()
+                    await enviar_bienvenida_recluta(thread, message.author)
+                    break
+        except Exception as e:
+            sys.stdout.write(f"🚨 Error al procesar hilo: {e}\n")
+            sys.stdout.flush()
+
+
+###
+
+
+
 
 # ==========================================
 # 4. MENÚS Y BÚSQUEDA
