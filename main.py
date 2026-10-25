@@ -120,12 +120,36 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot Jinetes MC listo. Prefijo: '{PREFIX}'")
-    await bot.tree.sync()
-    if not verificador_tiempo_radar.is_running():
-        verificador_tiempo_radar.start()
-    if not ping_keeping_alive.is_running():
-        ping_keeping_alive.start()
+    try:
+        print("="*50)
+        print("✅ Bot Jinetes MC iniciando...")
+        print(f"📌 Prefijo: '{PREFIX}'")
+        print(f"👤 Usuario: {bot.user.name} (ID: {bot.user.id})")
+        print("="*50)
+        
+        # Sincronizar comandos slash (esto a veces falla si hay comandos duplicados)
+        print("🔄 Sincronizando comandos slash...")
+        await bot.tree.sync()
+        print("✅ Comandos sincronizados correctamente.")
+        
+        # Iniciar tareas en segundo plano
+        if not verificador_tiempo_radar.is_running():
+            print("🕒 Iniciando verificador de radar...")
+            verificador_tiempo_radar.start()
+            
+        if not ping_keeping_alive.is_running():
+            print("💓 Iniciando ping de mantenimiento...")
+            ping_keeping_alive.start()
+            
+        print("🚀 ¡Bot Jinetes MC está 100% listo y operativo!")
+        print("="*50)
+        
+    except Exception as e:
+        print("🚨" * 20)
+        print(f"ERROR CRÍTICO EN on_ready: {e}")
+        import traceback
+        traceback.print_exc()
+        print("🚨" * 20)
 
 @bot.event
 async def on_disconnect():
