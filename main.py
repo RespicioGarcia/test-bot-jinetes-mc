@@ -306,23 +306,47 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_create(channel):
-    sys.stdout.write(f"🔔 [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__} | ID: {channel.id}\n")
+    sys.stdout.write(f" [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__} | ID: {channel.id}\n")
     sys.stdout.flush()
     
     if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
-        sys.stdout.write(f"✅ ¡ES UN TICKET! Procesando...\n")
+        sys.stdout.write(f"✅ ¡ES UN TICKET! Esperando 3s para que Ticket Tool termine...\n")
         sys.stdout.flush()
+        
         await asyncio.sleep(3)
+        
+        # Verificar permisos y acceso al canal
         try:
+            sys.stdout.write(f"🔍 Intentando acceder al historial del canal...\n")
+            sys.stdout.flush()
+            
+            mensajes_encontrados = 0
             async for message in channel.history(limit=10):
+                mensajes_encontrados += 1
+                sys.stdout.write(f"   📨 Mensaje {mensajes_encontrados}: Autor={message.author.name}, Bot={message.author.bot}\n")
+                sys.stdout.flush()
+                
                 if not message.author.bot:
-                    sys.stdout.write(f"👤 Usuario encontrado: {message.author.name}\n")
+                    sys.stdout.write(f"👤 ¡USUARIO NO-BOT ENCONTRADO: {message.author.name} (ID: {message.author.id})!\n")
+                    sys.stdout.flush()
+                    
+                    sys.stdout.write(f"📩 Enviando bienvenida...\n")
                     sys.stdout.flush()
                     await enviar_bienvenida_recluta(channel, message.author)
-                    break
+                    sys.stdout.write(f"✅ Bienvenida enviada correctamente.\n")
+                    sys.stdout.flush()
+                    return
+            
+            if mensajes_encontrados == 0:
+                sys.stdout.write(f"⚠️ ADVERTENCIA: No hay NINGÚN mensaje en el canal. Ticket Tool quizás no ha enviado nada aún.\n")
+                sys.stdout.write(f"💡 SOLUCIÓN: El usuario debe escribir algo primero, o usar el comando /recluta manualmente.\n")
+                sys.stdout.flush()
+                
         except Exception as e:
-            sys.stdout.write(f"🚨 Error al procesar ticket: {e}\n")
+            sys.stdout.write(f"🚨 ERROR al procesar ticket: {type(e).__name__}: {e}\n")
             sys.stdout.flush()
+            import traceback
+            traceback.print_exc()
 
 @bot.event
 async def on_thread_create(thread):
