@@ -546,44 +546,58 @@ class FormularioReclutaModal(discord.ui.Modal):
         super().__init__(title=titulo)
         
         for i, p in enumerate(preguntas):
-            pregunta = p.get('Pregunta', f'Pregunta {i+1}')
-            placeholder = p.get('Placeholder', 'Escribe tu respuesta...')
-            obligatoria = str(p.get('Obligatoria', '')).upper() == 'SI'
-            
-            # Determinar estilo
-            estilo = discord.TextStyle.short
-            palabras_clave_largas = ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'porque', 'cuéntanos', 'detalla', 'describe']
-            if any(palabra in str(pregunta).lower() for palabra in palabras_clave_largas):
-                estilo = discord.TextStyle.paragraph
-            
-            # Limpiar label (máximo 45 caracteres)
-            pregunta_limpia = pregunta.rstrip('*').strip()
-            if len(pregunta_limpia) > 40:
-                pregunta_limpia = pregunta_limpia[:40] + "..."
-            
-            label_final = f"{pregunta_limpia}{'*' if obligatoria else ''}"
-            
-            # Placeholder por defecto si está vacío
-            if not placeholder or placeholder.strip() == '':
-                placeholder = "Escribe aquí..."
-            
-            # Max length correcto
-            max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
-            
             try:
+                # FORZAR conversión a string TODO
+                pregunta_raw = p.get('Pregunta')
+                placeholder_raw = p.get('Placeholder')
+                obligatoria_raw = p.get('Obligatoria')
+                
+                # Convertir SIEMPRE a string, incluso si es None o int
+                pregunta = str(pregunta_raw) if pregunta_raw is not None else f'Pregunta {i+1}'
+                placeholder = str(placeholder_raw) if placeholder_raw is not None else 'Escribe tu respuesta...'
+                obligatoria = str(obligatoria_raw).upper() == 'SI' if obligatoria_raw is not None else False
+                
+                # Determinar estilo
+                estilo = discord.TextStyle.short
+                palabras_clave = ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'detalla', 'describe']
+                if any(palabra in pregunta.lower() for palabra in palabras_clave):
+                    estilo = discord.TextStyle.paragraph
+                
+                # Limpiar label
+                pregunta_limpia = pregunta.rstrip('*').strip()
+                if len(pregunta_limpia) > 40:
+                    pregunta_limpia = pregunta_limpia[:37] + "..."
+                
+                label_final = f"{pregunta_limpia}{'*' if obligatoria else ''}"
+                
+                # Asegurar que placeholder es string válido
+                if not isinstance(placeholder, str):
+                    placeholder = 'Escribe aquí...'
+                placeholder = placeholder.strip() if placeholder.strip() else 'Escribe aquí...'
+                
+                max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
+                
                 input_field = discord.ui.TextInput(
                     label=label_final,
-                    placeholder=placeholder[:100],  # Máx 100 chars
+                    placeholder=placeholder[:100],
                     required=obligatoria,
                     style=estilo,
-                    max_length=max_len,
-                    min_length=1
+                    max_length=max_len
                 )
                 self.add_item(input_field)
+                
             except Exception as e:
-                print(f"Error al añadir campo {i}: {e}")
-                print(f"  Label: {label_final} (len={len(label_final)})")
-                print(f"  Placeholder: {placeholder}")
+                print(f"❌ Error en campo {i}: {e}")
+                print(f"   Datos: {p}")
+                # Campo de emergencia
+                input_field = discord.ui.TextInput(
+                    label=f"Pregunta {i+1}",
+                    placeholder="Escribe aquí...",
+                    required=False,
+                    style=discord.TextStyle.short,
+                    max_length=100
+                )
+                self.add_item(input_field)
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
