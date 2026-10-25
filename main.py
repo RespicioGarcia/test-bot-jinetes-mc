@@ -542,28 +542,48 @@ class FormularioReclutaModal(discord.ui.Modal):
         self.total_paginas = total_paginas
         self.respuestas_previas = respuestas_previas or []
         
-        titulo = f"📝 Solicitud de Ingreso ({pagina_actual}/{total_paginas})"
+        titulo = f"Solicitud ({pagina_actual}/{total_paginas})"
         super().__init__(title=titulo)
         
         for i, p in enumerate(preguntas):
             pregunta = p.get('Pregunta', f'Pregunta {i+1}')
-            placeholder = p.get('Placeholder', '')
+            placeholder = p.get('Placeholder', 'Escribe tu respuesta...')
             obligatoria = str(p.get('Obligatoria', '')).upper() == 'SI'
             
+            # Determinar estilo
             estilo = discord.TextStyle.short
             palabras_clave_largas = ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'porque', 'cuéntanos', 'detalla', 'describe']
             if any(palabra in str(pregunta).lower() for palabra in palabras_clave_largas):
                 estilo = discord.TextStyle.paragraph
             
+            # Limpiar label (máximo 45 caracteres)
             pregunta_limpia = pregunta.rstrip('*').strip()
-            input_field = discord.ui.TextInput(
-                label=f"{pregunta_limpia} {'*' if obligatoria else ''}",
-                placeholder=placeholder,
-                required=obligatoria,
-                style=estilo,
-                max_length=1000 if estilo == discord.TextStyle.paragraph else 200
-            )
-            self.add_item(input_field)
+            if len(pregunta_limpia) > 40:
+                pregunta_limpia = pregunta_limpia[:40] + "..."
+            
+            label_final = f"{pregunta_limpia}{'*' if obligatoria else ''}"
+            
+            # Placeholder por defecto si está vacío
+            if not placeholder or placeholder.strip() == '':
+                placeholder = "Escribe aquí..."
+            
+            # Max length correcto
+            max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
+            
+            try:
+                input_field = discord.ui.TextInput(
+                    label=label_final,
+                    placeholder=placeholder[:100],  # Máx 100 chars
+                    required=obligatoria,
+                    style=estilo,
+                    max_length=max_len,
+                    min_length=1
+                )
+                self.add_item(input_field)
+            except Exception as e:
+                print(f"Error al añadir campo {i}: {e}")
+                print(f"  Label: {label_final} (len={len(label_final)})")
+                print(f"  Placeholder: {placeholder}")
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -587,7 +607,9 @@ class FormularioReclutaModal(discord.ui.Modal):
                 await interaction.response.defer(ephemeral=True)
                 await construir_y_enviar_embed(interaction, todas_las_respuestas)
         except Exception as e:
-            print(f"🚨 ERROR EN MODAL: {e}")
+            print(f" ERROR EN MODAL: {e}")
+            import traceback
+            traceback.print_exc()
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
 async def construir_y_enviar_embed(interaction, todas_las_respuestas):
