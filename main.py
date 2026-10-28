@@ -306,78 +306,64 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_create(channel):
-    sys.stdout.write(f"🔔 [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__} | ID: {channel.id}\n")
+    sys.stdout.write(f"🔔 [CANAL CREADO] Nombre: '{channel.name}'\n")
     sys.stdout.flush()
     
+    # Solo actuar si es un canal de texto y tiene "ticket" en el nombre
     if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
-        sys.stdout.write(f"✅ ¡ES UN TICKET! Buscando creador real...\n")
+        sys.stdout.write(f"✅ ¡ES UN TICKET! Buscando usuario real...\n")
         sys.stdout.flush()
         
-        await asyncio.sleep(3)
+        # Esperamos un poco más para asegurar que Ticket Tool ha enviado su mensaje
+        await asyncio.sleep(4)
         
         usuario_creador = None
         
-        # MÉTODO 1: Audit Logs (el más fiable)
+        # MÉTODO 1: Buscar menciones en los mensajes (Ticket Tool menciona al usuario)
         try:
-            sys.stdout.write(f" Consultando audit logs...\n")
+            sys.stdout.write(f"🔍 Buscando menciones en el historial...\n")
             sys.stdout.flush()
             
-            async for entry in channel.guild.audit_logs(limit=10, action=discord.AuditLogAction.channel_create):
-                if entry.target.id == channel.id:
-                    usuario_creador = entry.user
-                    sys.stdout.write(f"👤 Creador encontrado en audit log: {usuario_creador.name} (ID: {usuario_creador.id})\n")
-                    sys.stdout.flush()
+            async for message in channel.history(limit=5):
+                if message.mentions:
+                    for user in message.mentions:
+                        # IMPORTANTE: Ignorar bots (como Ticket Tool)
+                        if not user.bot:
+                            usuario_creador = user
+                            sys.stdout.write(f" Usuario encontrado por mención: {usuario_creador.name}\n")
+                            sys.stdout.flush()
+                            break
+                if usuario_creador:
                     break
         except Exception as e:
-            sys.stdout.write(f"⚠️ Error leyendo audit logs: {e}\n")
+            sys.stdout.write(f"⚠️ Error buscando menciones: {e}\n")
             sys.stdout.flush()
-        
-        # MÉTODO 2: Buscar menciones en mensajes de bots (Ticket Tool menciona al usuario)
-        if not usuario_creador:
-            try:
-                sys.stdout.write(f"🔍 Buscando menciones en mensajes...\n")
-                sys.stdout.flush()
-                
-                async for message in channel.history(limit=10):
-                    if message.mentions:
-                        # Tomar el primer usuario mencionado (no bot)
-                        for mentioned_user in message.mentions:
-                            if not mentioned_user.bot:
-                                usuario_creador = mentioned_user
-                                sys.stdout.write(f"👤 Usuario mencionado encontrado: {usuario_creador.name}\n")
-                                sys.stdout.flush()
-                                break
-                    if usuario_creador:
-                        break
-            except Exception as e:
-                sys.stdout.write(f"⚠️ Error buscando menciones: {e}\n")
-                sys.stdout.flush()
-        
-        # MÉTODO 3: Buscar primer mensaje de usuario real (no bot)
+
+        # MÉTODO 2: Si no hay menciones, buscar el primer mensaje que NO sea de un bot
         if not usuario_creador:
             try:
                 sys.stdout.write(f"🔍 Buscando primer mensaje de usuario real...\n")
                 sys.stdout.flush()
                 
-                async for message in channel.history(limit=20):
+                async for message in channel.history(limit=10):
                     if not message.author.bot:
                         usuario_creador = message.author
-                        sys.stdout.write(f"👤 Usuario real encontrado: {usuario_creador.name}\n")
+                        sys.stdout.write(f"👤 Usuario encontrado por historial: {usuario_creador.name}\n")
                         sys.stdout.flush()
                         break
             except Exception as e:
-                sys.stdout.write(f"⚠️ Error en historial: {e}\n")
+                sys.stdout.write(f"️ Error buscando historial: {e}\n")
                 sys.stdout.flush()
-        
-        # Enviar bienvenida si encontramos al usuario
+
+        # Enviar la bienvenida si encontramos al usuario correcto
         if usuario_creador:
-            sys.stdout.write(f"📩 Enviando bienvenida a {usuario_creador.name}...\n")
+            sys.stdout.write(f" Enviando bienvenida a {usuario_creador.name}...\n")
             sys.stdout.flush()
             await enviar_bienvenida_recluta(channel, usuario_creador)
             sys.stdout.write(f"✅ ¡Bienvenida enviada correctamente!\n")
             sys.stdout.flush()
         else:
-            sys.stdout.write(f"❌ No se pudo identificar al creador del ticket.\n")
+            sys.stdout.write(f"❌ No se pudo identificar al usuario real.\n")
             sys.stdout.write(f"💡 Usa /recluta @usuario manualmente.\n")
             sys.stdout.flush()
 
