@@ -306,55 +306,53 @@ async def on_ready():
 
 @bot.event
 async def on_guild_channel_create(channel):
-    sys.stdout.write(f" [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__} | ID: {channel.id}\n")
+    sys.stdout.write(f" [CANAL CREADO] Nombre: '{channel.name}' | Tipo: {type(channel).__name__}\n")
     sys.stdout.flush()
     
     if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
-        sys.stdout.write(f"✅ ¡ES UN TICKET! Iniciando proceso de detección...\n")
+        sys.stdout.write(f"✅ ¡ES UN TICKET! Buscando creador...\n")
         sys.stdout.flush()
         
-        # Reintentos: Esperar hasta 15 segundos en total
-        max_reintentos = 3
-        tiempo_espera = 5  # segundos entre cada intento
+        await asyncio.sleep(3)
         
-        for intento in range(1, max_reintentos + 1):
-            sys.stdout.write(f"🔄 Intento {intento}/{max_reintentos}: Esperando {tiempo_espera}s...\n")
+        usuario_creador = None
+        
+        # Método 1: Buscar en audit logs quién creó el canal
+        try:
+            async for entry in channel.guild.audit_logs(limit=5, action=discord.AuditLogAction.channel_create):
+                if entry.target.id == channel.id:
+                    usuario_creador = entry.user
+                    sys.stdout.write(f"👤 Creador encontrado en audit log: {usuario_creador.name}\n")
+                    sys.stdout.flush()
+                    break
+        except Exception as e:
+            sys.stdout.write(f"⚠️ No se pudo leer audit log: {e}\n")
             sys.stdout.flush()
-            await asyncio.sleep(tiempo_espera)
-            
+        
+        # Método 2: Si no, buscar en el historial del canal
+        if not usuario_creador:
             try:
-                sys.stdout.write(f"🔍 Buscando mensajes de usuario...\n")
-                sys.stdout.flush()
-                
-                mensajes_encontrados = 0
-                async for message in channel.history(limit=20):
-                    mensajes_encontrados += 1
-                    sys.stdout.write(f"   📨 Mensaje {mensajes_encontrados}: {message.author.name} (Bot={message.author.bot})\n")
-                    sys.stdout.flush()
-                    
+                async for message in channel.history(limit=10):
                     if not message.author.bot:
-                        sys.stdout.write(f"👤 ¡USUARIO ENCONTRADO: {message.author.name}!\n")
-                        sys.stdout.write(f" Enviando bienvenida y formulario...\n")
+                        usuario_creador = message.author
+                        sys.stdout.write(f"👤 Usuario encontrado en historial: {usuario_creador.name}\n")
                         sys.stdout.flush()
-                        
-                        await enviar_bienvenida_recluta(channel, message.author)
-                        
-                        sys.stdout.write(f"✅ ¡PROCESO COMPLETADO CON ÉXITO!\n")
-                        sys.stdout.flush()
-                        return
-                
-                if mensajes_encontrados == 0:
-                    sys.stdout.write(f"   ⚠️ Sin mensajes aún. Reintentando...\n")
-                    sys.stdout.flush()
-                    
+                        break
             except Exception as e:
-                sys.stdout.write(f"   🚨 Error en intento {intento}: {e}\n")
+                sys.stdout.write(f"⚠️ Error en historial: {e}\n")
                 sys.stdout.flush()
         
-        # Si llegamos aquí, todos los reintentos fallaron
-        sys.stdout.write(f"❌ No se encontró usuario después de {max_reintentos} intentos.\n")
-        sys.stdout.write(f"💡 Usa el comando /recluta @usuario manualmente en el canal.\n")
-        sys.stdout.flush()
+        # Si encontramos al usuario, enviar bienvenida
+        if usuario_creador:
+            sys.stdout.write(f"📩 Enviando bienvenida a {usuario_creador.name}...\n")
+            sys.stdout.flush()
+            await enviar_bienvenida_recluta(channel, usuario_creador)
+            sys.stdout.write(f"✅ ¡Bienvenida enviada con éxito!\n")
+            sys.stdout.flush()
+        else:
+            sys.stdout.write(f"❌ No se pudo identificar al creador del ticket.\n")
+            sys.stdout.write(f" Usa /recluta @usuario manualmente.\n")
+            sys.stdout.flush()
 
 @bot.event
 async def on_thread_create(thread):
