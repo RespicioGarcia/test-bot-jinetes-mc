@@ -556,7 +556,7 @@ async def enviar_bienvenida_recluta(canal, usuario):
     await canal.send(content=config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!').replace('{user}', usuario.mention), view=BienvenidaReclutaView(usuario))
 
 # ==========================================
-# 8. GENERADOR DE CARNET (NUEVO)
+# 8. GENERADOR DE CARNET
 # ==========================================
 def buscar_ficha_usuario(user_id):
     print(f"🔍 Buscando ficha para user_id: {user_id}")
@@ -574,7 +574,66 @@ def buscar_ficha_usuario(user_id):
         print(f"❌ No se encontró ficha para user_id: {user_id}")
         return None
     except Exception as e:
-        print(f"🚨 Error buscando ficha: {e}")
+        print(f" Error buscando ficha: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def generar_carnet_imagen(datos):
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        ruta_plantilla = os.path.join(BASE_DIR, "plantilla_carnet.png")
+        ruta_fuente = os.path.join(BASE_DIR, "fuente.ttf")
+        
+        print(f" Ruta plantilla: {ruta_plantilla}")
+        print(f"📂 Ruta fuente: {ruta_fuente}")
+        print(f"📋 DATOS RECIBIDOS DEL EXCEL: {list(datos.keys())}")
+        
+        if not os.path.exists(ruta_plantilla):
+            print(f" ERROR: No se encuentra la plantilla en {ruta_plantilla}")
+            return None
+        if not os.path.exists(ruta_fuente):
+            print(f"🚨 ERROR: No se encuentra la fuente en {ruta_fuente}")
+            return None
+        
+        img = Image.open(ruta_plantilla)
+        draw = ImageDraw.Draw(img)
+        font = ImageFont.truetype(ruta_fuente, 36)
+        font_pequeno = ImageFont.truetype(ruta_fuente, 28)
+        color_texto = (255, 255, 255)
+        
+        nombre_ic = str(datos.get('¿Cuál es tu nombre IC?', datos.get('[Pregunta 1]', datos.get('Nombre', 'TEST_NOMBRE'))))
+        id_usuario = str(datos.get('ID_Usuario', '000000'))
+        fecha_completa = str(datos.get('Fecha', '01/01/2026 00:00'))
+        nivel = str(datos.get('Nivel', datos.get('[Pregunta 2]', datos.get('Edad OOC', '0'))))
+        pais = str(datos.get('Pais que conectas', datos.get('[Pregunta 8]', datos.get('País', 'TEST_PAIS'))))
+        
+        print(f" Nombre IC extraído: '{nombre_ic}'")
+        print(f"🔢 ID Usuario: '{id_usuario}'")
+        print(f"📅 Fecha: '{fecha_completa}'")
+        print(f"🎮 Nivel: '{nivel}'")
+        print(f"🌍 País: '{pais}'")
+        
+        fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
+        nr_formateado = f"#{id_usuario}"
+        
+        X_ALINEADO = 720
+        print(f"🎨 Dibujando texto en X={X_ALINEADO}")
+        
+        draw.text((X_ALINEADO, 340), nombre_ic, fill=color_texto, font=font)
+        draw.text((X_ALINEADO, 440), nr_formateado, fill=color_texto, font=font)
+        draw.text((X_ALINEADO, 530), fecha_solo, fill=color_texto, font=font_pequeno)
+        draw.text((X_ALINEADO, 620), nivel, fill=color_texto, font=font)
+        draw.text((X_ALINEADO, 710), pais, fill=color_texto, font=font_pequeno)
+        
+        print("✅ Texto dibujado, guardando imagen...")
+        
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        return img_byte_arr
+    except Exception as e:
+        print(f"🚨 Error generando imagen: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -603,10 +662,6 @@ async def carnet_comando(interaction: discord.Interaction, usuario: discord.Memb
     archivo = discord.File(img_bytes, filename=f"carnet_{usuario.name}.png")
     await interaction.followup.send(f"🪪 **Carnet oficial de {usuario.mention}**", file=archivo)
     print(f"✅ Carnet enviado correctamente")
-
-
-
-
 # ==========================================
 # 9. COMANDOS DE PREFIJO Y CRONOGRAMA
 # ==========================================
