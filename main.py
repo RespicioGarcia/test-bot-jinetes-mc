@@ -1031,12 +1031,7 @@ async def enviar_bienvenida_recluta(canal, usuario):
         mensaje_final = mensaje_base.replace('{user}', usuario.mention)
         view = BienvenidaReclutaView(usuario)
         await canal.send(content=mensaje_final, view=view)
-    else:
-        # Si no hay desplegables, usar el sistema antiguo directo
-        mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
-        mensaje_final = mensaje_base.replace('{user}', usuario.mention)
-        view = BienvenidaReclutaView(usuario)
-        await canal.send(content=mensaje_final, view=view)
+   
 
 # ==========================================
 # 9. COMANDO FICHA
