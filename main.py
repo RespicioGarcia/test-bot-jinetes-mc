@@ -684,10 +684,17 @@ async def carnet_comando(interaction: discord.Interaction, usuario: discord.Memb
         # Usar fuente por defecto (siempre funciona)
         font = ImageFont.load_default()
         
-        # Texto de prueba en coordenadas visibles
+        # Texto de prueba en esquina (para confirmar que funciona)
         draw.text((50, 50), "TEST", fill=(255, 255, 255), font=font)
-        draw.text((50, 100), nombre_ic, fill=(255, 255, 255), font=font)
-        draw.text((50, 150), f"#{nr_carnet}", fill=(255, 255, 255), font=font)
+        
+        # Coordenadas para cada campo (ajustadas visualmente)
+        X_CAMPOS = 550  # Coordenada X común para todos los campos
+        
+        draw.text((X_CAMPOS, 380), nombre_ic, fill=(255, 255, 255), font=font)
+        draw.text((X_CAMPOS, 450), f"#{nr_carnet}", fill=(255, 255, 255), font=font)
+        draw.text((X_CAMPOS, 520), fecha_solo, fill=(255, 255, 255), font=font)
+        draw.text((X_CAMPOS, 590), nivel, fill=(255, 255, 255), font=font)
+        draw.text((X_CAMPOS, 660), pais, fill=(255, 255, 255), font=font)
         
         # Guardar
         img_byte_arr = io.BytesIO()
