@@ -1003,13 +1003,34 @@ async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
     
     # Si hay preguntas desplegables configuradas, enviar menús primero
+async def enviar_bienvenida_recluta(canal, usuario):
+    config = cargar_config_reclutamiento()
+    
+    print(f"🔍 DEBUG: PREGUNTAS_DESPLEGABLES = {len(PREGUNTAS_DESPLEGABLES)}")
+    print(f"🔍 DEBUG: Contenido = {PREGUNTAS_DESPLEGABLES}")
+    
+    # Si hay preguntas desplegables configuradas, enviar menús primero
     if PREGUNTAS_DESPLEGABLES:
-        await enviar_log("reclutamiento_ticket", f" Menús desplegables enviados a {usuario.mention} en {canal.mention}", discord.Color.blue())
-        view = MenuDesplegableView(usuario, canal)
-        await canal.send(
-            content=f" **{usuario.mention}**, bienvenido al proceso de reclutamiento de **Jinetes MC**.\n\nPor favor, selecciona tus respuestas en los menús desplegables y luego pulsa el botón para continuar.",
-            view=view
-        )
+        try:
+            view = MenuDesplegableView(usuario, canal)
+            print(f"🔍 DEBUG: View creada con {len(view.children)} componentes")
+            
+            mensaje = await canal.send(
+                content=f"👋 **{usuario.mention}**, bienvenido al proceso de reclutamiento de **Jinetes MC**.\n\nPor favor, selecciona tus respuestas en los menús desplegables y luego pulsa el botón para continuar.",
+                view=view
+            )
+            print(f"✅ DEBUG: Mensaje enviado con ID {mensaje.id}")
+            await enviar_log("reclutamiento_ticket", f"📋 Menús desplegables enviados a {usuario.mention} en {canal.mention}", discord.Color.blue())
+        except Exception as e:
+            print(f" ERROR ENVIANDO MENÚS: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("⚠️ DEBUG: No hay preguntas desplegables, usando sistema antiguo")
+        mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
+        mensaje_final = mensaje_base.replace('{user}', usuario.mention)
+        view = BienvenidaReclutaView(usuario)
+        await canal.send(content=mensaje_final, view=view)
     else:
         # Si no hay desplegables, usar el sistema antiguo directo
         mensaje_base = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!')
