@@ -602,11 +602,12 @@ def generar_carnet_imagen(datos):
         font_pequeno = ImageFont.truetype(ruta_fuente, 28)
         color_texto = (255, 255, 255)
         
-        nombre_ic = str(datos.get('¿Cuál es tu nombre IC?', datos.get('[Pregunta 1]', datos.get('Nombre', 'TEST_NOMBRE'))))
+        nombre_ic = str(datos.get('[Pregunta 1]', 'Desconocido'))
         id_usuario = str(datos.get('ID_Usuario', '000000'))
         fecha_completa = str(datos.get('Fecha', '01/01/2026 00:00'))
-        nivel = str(datos.get('Nivel', datos.get('[Pregunta 2]', datos.get('Edad OOC', '0'))))
-        pais = str(datos.get('Pais que conectas', datos.get('[Pregunta 8]', datos.get('País', 'TEST_PAIS'))))
+        nivel = str(datos.get('[Pregunta 2]', '0'))
+        pais = str(datos.get('[Pregunta 4]', 'Desconocido'))
+        nr_carnet = str(datos.get('[Pregunta 5]', '000000'))
         
         print(f" Nombre IC extraído: '{nombre_ic}'")
         print(f"🔢 ID Usuario: '{id_usuario}'")
@@ -615,11 +616,8 @@ def generar_carnet_imagen(datos):
         print(f"🌍 País: '{pais}'")
         
         fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
-        nr_formateado = f"#{id_usuario}"
-        
-        X_ALINEADO = 720
-        print(f"🎨 Dibujando texto en X={X_ALINEADO}")
-        
+        nr_formateado = f"#{nr_carnet}"
+
         draw.text((X_ALINEADO, 340), nombre_ic, fill=color_texto, font=font)
         draw.text((X_ALINEADO, 440), nr_formateado, fill=color_texto, font=font)
         draw.text((X_ALINEADO, 530), fecha_solo, fill=color_texto, font=font_pequeno)
