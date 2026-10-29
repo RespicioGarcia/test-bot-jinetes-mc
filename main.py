@@ -635,76 +635,72 @@ def generar_carnet_imagen(datos):
 
 @bot.tree.command(name="carnet", description="Generar carnet oficial del miembro")
 async def carnet_comando(interaction: discord.Interaction, usuario: discord.Member):
-    print(f"🎫 COMANDO /carnet ejecutado para usuario: {usuario.name} (ID: {usuario.id})")
-    await interaction.response.defer()
+    # 1. Defer para que Discord sepa que estamos trabajando
+    await interaction.response.defer(ephemeral=True)
     
-    datos = buscar_ficha_usuario(usuario.id)
+    # 2. Buscar datos en Excel
+    records = sheet_registro_reclutas.get_all_records()
+    ficha = None
+    for row in records:
+        if str(row.get('ID_Usuario', '')) == str(usuario.id):
+            ficha = row
+            break
+            
+    if not ficha:
+        return await interaction.followup.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
     
-    if not datos:
-        print(f"⚠️ No hay ficha para {usuario.name}, enviando mensaje de error")
-        return await interaction.followup.send(f"❌ **{usuario.mention}** no tiene ficha registrada en la base de datos.")
+    # 3. Extraer datos
+    nombre_ic = str(ficha.get('[Pregunta 1]', 'NO_ENCONTRADO'))
+    nivel = str(ficha.get('[Pregunta 2]', 'NO_ENCONTRADO'))
+    pais = str(ficha.get('[Pregunta 4]', 'NO_ENCONTRADO'))
+    nr_carnet = str(ficha.get('[Pregunta 5]', 'NO_ENCONTRADO'))
+    fecha_completa = str(ficha.get('Fecha', '01/01/2026 00:00'))
+    fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
     
-    print(f"📊 Datos encontrados: {list(datos.keys())}")
-    print(f"🖼️ Generando imagen del carnet...")
+    # 4. ENVIAR MENSAJE DE DEPURACIÓN EN DISCORD (para ver si el Excel funciona)
+    debug_msg = (
+        f"🔍 **DATOS EXTRAÍDOS DEL EXCEL:**\n"
+        f"👤 Nombre: `{nombre_ic}`\n"
+        f"🔢 Nr: `{nr_carnet}`\n"
+        f"📅 Fecha: `{fecha_solo}`\n"
+        f"🎮 Nivel: `{nivel}`\n"
+        f"🌍 País: `{pais}`"
+    )
+    await interaction.followup.send(debug_msg, ephemeral=True)
     
-    img_bytes = generar_carnet_imagen(datos)
-    
-    if not img_bytes:
-        print(f"🚨 Error al generar la imagen")
-        return await interaction.followup.send("🚨 Hubo un error al generar la imagen. Asegúrate de que `plantilla_carnet.png` y `fuente.ttf` estén en GitHub.")
-    
-    print(f"✅ Imagen generada correctamente, enviando a Discord...")
-    archivo = discord.File(img_bytes, filename=f"carnet_{usuario.name}.png")
-    await interaction.followup.send(f"🪪 **Carnet oficial de {usuario.mention}**", file=archivo)
-    print(f"✅ Carnet enviado correctamente")
-# ==========================================
-# 9. COMANDOS DE PREFIJO Y CRONOGRAMA
-# ==========================================
-@bot.event
-async def on_message(message):
-    if message.author.bot or not message.content.startswith(PREFIX): return
-    args = message.content[len(PREFIX):].strip().split()
-    if not args: return
-    comando_nombre = args[0].lower()
-    if comando_nombre in COMANDOS_CONFIG:
-        config = COMANDOS_CONFIG[comando_nombre]
-        if str(config.get('Activo', '')).upper() == 'SI':
-            funcion = config.get('Funcion', '')
-            if funcion == 'menu_ayuda': await ejecutar_menu_ayuda(message)
-            elif funcion == 'radar_geto': await ejecutar_radar(message)
-
-@tasks.loop(seconds=30)
-async def verificador_tiempo_radar():
-    global radar_abierto_al_publico, ultimo_radar_message_id, canal_radar_id
-    if not canal_radar_id:
-        canal_id_str = cargar_config_general().get('CANAL_RADAR_ID', '')
-        if canal_id_str: canal_radar_id = int(canal_id_str)
-        else: return
-    ahora = datetime.datetime.now(datetime.timezone.utc)
-    if ahora.weekday() in DIAS_ACTIVIDAD:
-        for h in HORAS_ACTIVIDAD:
-            h_apertura = h - 1 if h > 0 else 23
-            if ahora.hour == h_apertura and ahora.minute < 5 and not radar_abierto_al_publico:
-                radar_abierto_al_publico = True
-                try:
-                    canal = bot.get_channel(canal_radar_id)
-                    if canal:
-                        await canal.send(f"🔓 **[SISTEMA]:** Posiciones abiertas para la actividad de las **{h}:00 UTC**. ¡Asignen zonas!")
-                        await actualizar_radar_en_canal(canal)
-                except Exception as e: print(f"Error al abrir radar: {e}")
-                break
-        for h in HORAS_ACTIVIDAD:
-            if ahora.hour == h and ahora.minute == 5:
-                if radar_abierto_al_publico or any(RADAR_DESPLIEGUE.values()):
-                    radar_abierto_al_publico = False
-                    try:
-                        canal = bot.get_channel(canal_radar_id)
-                        if canal:
-                            await canal.send(f"🗃️ **ARCHIVO DE OPERACIONES AUTOMÁTICO**\n📅 **Fecha:** {ahora.strftime('%d/%m/%Y')}\n⏱️ **Actividad:** {h}:00 UTC\n🔒 **Estado:** Cuadrante Bloqueado\n📋 **Despliegue Final:**\n{generar_mapa_texto()}")
-                            for zona in RADAR_DESPLIEGUE: RADAR_DESPLIEGUE[zona] = None
-                            await actualizar_radar_en_canal(canal)
-                    except Exception as e: print(f"Error al cerrar radar: {e}")
-                    break
+    # 5. Generar imagen con PRUEBA DE FUEGO
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        img = Image.open(os.path.join(BASE_DIR, "plantilla_carnet.png"))
+        draw = ImageDraw.Draw(img)
+        
+        # Cargar fuente (o usar la por defecto si falla)
+        font_path = os.path.join(BASE_DIR, "fuente.ttf")
+        if os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, 40)
+        else:
+            font = ImageFont.load_default()
+            
+        # 🔥 PRUEBA DE FUEGO: Texto ROJO gigante en el CENTRO de la imagen
+        draw.text((512, 512), "PRUEBA DE TEXTO", fill=(255, 0, 0), font=font)
+        
+        # Dibujar datos reales (coordenadas originales)
+        X_ALINEADO = 720
+        draw.text((X_ALINEADO, 340), nombre_ic, fill=(255, 255, 255), font=font)
+        draw.text((X_ALINEADO, 440), f"#{nr_carnet}", fill=(255, 255, 255), font=font)
+        draw.text((X_ALINEADO, 530), fecha_solo, fill=(255, 255, 255), font=font)
+        draw.text((X_ALINEADO, 620), nivel, fill=(255, 255, 255), font=font)
+        draw.text((X_ALINEADO, 710), pais, fill=(255, 255, 255), font=font)
+        
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        archivo = discord.File(img_byte_arr, filename="carnet_prueba.png")
+        await interaction.followup.send("🪪 Aquí tienes el carnet con la prueba de fuego (texto rojo en el centro):", file=archivo, ephemeral=True)
+        
+    except Exception as e:
+        await interaction.followup.send(f"🚨 Error al generar imagen: {e}", ephemeral=True)
 
 @tasks.loop(minutes=5)
 async def ping_keeping_alive():
