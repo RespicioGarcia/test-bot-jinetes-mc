@@ -585,12 +585,8 @@ def generar_carnet_imagen(datos):
         ruta_plantilla = os.path.join(BASE_DIR, "plantilla_carnet.png")
         ruta_fuente = os.path.join(BASE_DIR, "fuente.ttf")
         
-        print(f" Ruta plantilla: {ruta_plantilla}")
-        print(f"📂 Ruta fuente: {ruta_fuente}")
-        print(f"📋 DATOS RECIBIDOS DEL EXCEL: {list(datos.keys())}")
-        
         if not os.path.exists(ruta_plantilla):
-            print(f" ERROR: No se encuentra la plantilla en {ruta_plantilla}")
+            print(f"🚨 ERROR: No se encuentra la plantilla en {ruta_plantilla}")
             return None
         if not os.path.exists(ruta_fuente):
             print(f"🚨 ERROR: No se encuentra la fuente en {ruta_fuente}")
@@ -602,6 +598,7 @@ def generar_carnet_imagen(datos):
         font_pequeno = ImageFont.truetype(ruta_fuente, 28)
         color_texto = (255, 255, 255)
         
+        # Extraer datos del Excel con las columnas correctas
         nombre_ic = str(datos.get('[Pregunta 1]', 'Desconocido'))
         id_usuario = str(datos.get('ID_Usuario', '000000'))
         fecha_completa = str(datos.get('Fecha', '01/01/2026 00:00'))
@@ -609,27 +606,27 @@ def generar_carnet_imagen(datos):
         pais = str(datos.get('[Pregunta 4]', 'Desconocido'))
         nr_carnet = str(datos.get('[Pregunta 5]', '000000'))
         
-        print(f" Nombre IC extraído: '{nombre_ic}'")
-        print(f"🔢 ID Usuario: '{id_usuario}'")
-        print(f"📅 Fecha: '{fecha_completa}'")
-        print(f"🎮 Nivel: '{nivel}'")
-        print(f"🌍 País: '{pais}'")
-        
+        # Formatear datos
         fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
         nr_formateado = f"#{nr_carnet}"
-
+        
+        # Coordenada X fija para alinear todos los campos
+        X_ALINEADO = 720
+        
+        # Dibujar los textos (todos con la misma X, distinta Y)
         draw.text((X_ALINEADO, 340), nombre_ic, fill=color_texto, font=font)
         draw.text((X_ALINEADO, 440), nr_formateado, fill=color_texto, font=font)
         draw.text((X_ALINEADO, 530), fecha_solo, fill=color_texto, font=font_pequeno)
         draw.text((X_ALINEADO, 620), nivel, fill=color_texto, font=font)
         draw.text((X_ALINEADO, 710), pais, fill=color_texto, font=font_pequeno)
         
-        print("✅ Texto dibujado, guardando imagen...")
-        
+        # Guardar en memoria
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
+        
         return img_byte_arr
+        
     except Exception as e:
         print(f"🚨 Error generando imagen: {e}")
         import traceback
