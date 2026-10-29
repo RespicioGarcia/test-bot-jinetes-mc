@@ -657,7 +657,7 @@ async def carnet_comando(interaction: discord.Interaction, usuario: discord.Memb
     fecha_completa = str(ficha.get('Fecha', '01/01/2026 00:00'))
     fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
     
-    # 4. ENVIAR MENSAJE DE DEPURACIÓN EN DISCORD (para ver si el Excel funciona)
+    # 4. ENVIAR MENSAJE DE DEPURACIÓN EN DISCORD
     debug_msg = (
         f"🔍 **DATOS EXTRAÍDOS DEL EXCEL:**\n"
         f"👤 Nombre: `{nombre_ic}`\n"
@@ -669,37 +669,36 @@ async def carnet_comando(interaction: discord.Interaction, usuario: discord.Memb
     await interaction.followup.send(debug_msg, ephemeral=True)
     
     # 5. Generar imagen simplificada
-try:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    
-    # Abrir plantilla
-    img = Image.open(os.path.join(BASE_DIR, "plantilla_carnet.png"))
-    
-    # Convertir a modo RGB (compatible)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    
-    draw = ImageDraw.Draw(img)
-    
-    # Usar fuente por defecto (siempre funciona)
-    font = ImageFont.load_default()
-    
-    # Texto de prueba en coordenadas visibles
-    draw.text((50, 50), "TEST", fill=(255, 255, 255), font=font)
-    draw.text((50, 100), nombre_ic, fill=(255, 255, 255), font=font)
-    draw.text((50, 150), f"#{nr_carnet}", fill=(255, 255, 255), font=font)
-    
-    # Guardar
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='PNG')
-    img_byte_arr.seek(0)
-    
-    archivo = discord.File(img_byte_arr, filename="carnet_test.png")
-    await interaction.followup.send("🪪 Carnet con texto en esquina superior izquierda:", file=archivo, ephemeral=True)
-    
-except Exception as e:
-    await interaction.followup.send(f"🚨 Error: {e}", ephemeral=True)
-
+    try:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        
+        # Abrir plantilla
+        img = Image.open(os.path.join(BASE_DIR, "plantilla_carnet.png"))
+        
+        # Convertir a modo RGB (compatible)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        draw = ImageDraw.Draw(img)
+        
+        # Usar fuente por defecto (siempre funciona)
+        font = ImageFont.load_default()
+        
+        # Texto de prueba en coordenadas visibles
+        draw.text((50, 50), "TEST", fill=(255, 255, 255), font=font)
+        draw.text((50, 100), nombre_ic, fill=(255, 255, 255), font=font)
+        draw.text((50, 150), f"#{nr_carnet}", fill=(255, 255, 255), font=font)
+        
+        # Guardar
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        archivo = discord.File(img_byte_arr, filename="carnet_test.png")
+        await interaction.followup.send("🪪 Carnet con texto en esquina superior izquierda:", file=archivo, ephemeral=True)
+        
+    except Exception as e:
+        await interaction.followup.send(f"🚨 Error: {e}", ephemeral=True)
 @tasks.loop(minutes=5)
 async def ping_keeping_alive():
     try:
