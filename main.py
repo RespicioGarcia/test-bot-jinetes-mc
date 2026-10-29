@@ -373,21 +373,29 @@ class RadarControlView(discord.ui.View):
 
 class ResetPasswordModal(discord.ui.Modal, title="🔐 Autorización de Reset"):
     password_input = discord.ui.TextInput(label="Clave de Reset", style=discord.TextStyle.short, placeholder="Clave de administrador...", required=True)
+
     async def on_submit(self, interaction: discord.Interaction):
+        global ultimo_radar_message_id  # <-- DEBE IR AL PRINCIPIO ABSOLUTO DE LA FUNCIÓN
+        
         if self.password_input.value == cargar_config_general().get('CLAVE_RESET', 'admin'):
             await interaction.response.defer(ephemeral=True)
             canal = interaction.channel
             mapa_antes = generar_mapa_texto()
+            
             if ultimo_radar_message_id:
                 try:
                     msg_viejo = await canal.fetch_message(ultimo_radar_message_id)
                     await msg_viejo.delete()
                 except: pass
+                
             await canal.send(f"🧹 **HISTORIAL: RADAR RESET MANUAL**\n👤 **Responsable:** {interaction.user.mention}\n🗄️ **Estado archivado:**\n{mapa_antes}")
-            for zona in RADAR_DESPLIEGUE: RADAR_DESPLIEGUE[zona] = None
-            global ultimo_radar_message_id
+            
+            for zona in RADAR_DESPLIEGUE: 
+                RADAR_DESPLIEGUE[zona] = None
+                
             nuevo_msg = await canal.send(content=generar_mapa_texto(), view=RadarControlView())
             ultimo_radar_message_id = nuevo_msg.id
+            
             await interaction.followup.send("✅ Radar reseteado.", ephemeral=True)
         else:
             await interaction.response.send_message("⚠️ **Clave incorrecta.**", ephemeral=True)
