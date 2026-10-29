@@ -571,16 +571,33 @@ def buscar_ficha_usuario(user_id):
 
 def generar_carnet_imagen(datos):
     try:
-        img = Image.open("plantilla_carnet.png")
+        # Obtener la ruta absoluta de la carpeta donde está main.py
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        
+        # Construir rutas completas
+        ruta_plantilla = os.path.join(BASE_DIR, "plantilla_carnet.png")
+        ruta_fuente = os.path.join(BASE_DIR, "fuente.ttf")
+        
+        print(f" Buscando plantilla en: {ruta_plantilla}")
+        print(f"📂 Buscando fuente en: {ruta_fuente}")
+        
+        # Verificar que los archivos existen
+        if not os.path.exists(ruta_plantilla):
+            print(f" ERROR: No se encuentra la plantilla en {ruta_plantilla}")
+            return None
+        if not os.path.exists(ruta_fuente):
+            print(f"🚨 ERROR: No se encuentra la fuente en {ruta_fuente}")
+            return None
+        
+        img = Image.open(ruta_plantilla)
         draw = ImageDraw.Draw(img)
-        font = ImageFont.truetype("fuente.ttf", 36)
-        font_pequeno = ImageFont.truetype("fuente.ttf", 28)
+        font = ImageFont.truetype(ruta_fuente, 36)
+        font_pequeno = ImageFont.truetype(ruta_fuente, 28)
         color_texto = (255, 255, 255)
         X_ALINEADO = 720
         
-        # Extracción segura de datos (ajusta las claves si tus encabezados de Excel son ligeramente distintos)
         nombre_ic = str(datos.get('¿Cuál es tu nombre IC?', datos.get('[Pregunta 1]', 'Desconocido')))
-        id_usuario = str(datos.get('ID_Usuario', '000000'))
+        id_usuario = str(datos.get('[Pregunta 5]', '000000'))
         fecha_completa = str(datos.get('Fecha', '01/01/2026 00:00'))
         nivel = str(datos.get('Nivel', datos.get('[Pregunta 2]', '0')))
         pais = str(datos.get('Pais que conectas', datos.get('[Pregunta 4]', 'Desconocido')))
@@ -603,7 +620,6 @@ def generar_carnet_imagen(datos):
         import traceback
         traceback.print_exc()
         return None
-
 @bot.tree.command(name="carnet", description="Generar carnet oficial del miembro")
 async def carnet_comando(interaction: discord.Interaction, usuario: discord.Member):
     await interaction.response.defer()
