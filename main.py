@@ -558,71 +558,11 @@ async def enviar_bienvenida_recluta(canal, usuario):
 # ==========================================
 # 8. GENERADOR DE CARNET (UNIFICADO Y LIMPIO)
 # ==========================================
-def generar_carnet_imagen(datos):
-    try:
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        ruta_plantilla = os.path.join(BASE_DIR, "plantilla_carnet.png")
-        ruta_fuente = os.path.join(BASE_DIR, "fuente.ttf")
-        
-        if not os.path.exists(ruta_plantilla):
-            print(f"🚨 ERROR: No se encuentra la plantilla en {ruta_plantilla}")
-            return None
-        if not os.path.exists(ruta_fuente):
-            print(f"🚨 ERROR: No se encuentra la fuente en {ruta_fuente}")
-            return None
-        
-        img = Image.open(ruta_plantilla)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-            
-        draw = ImageDraw.Draw(img)
-        
-        # Intentamos cargar la fuente personalizada, si falla usamos la por defecto
-        try:
-            font = ImageFont.truetype(ruta_fuente, 36)
-            font_pequeno = ImageFont.truetype(ruta_fuente, 28)
-        except:
-            font = ImageFont.load_default()
-            font_pequeno = ImageFont.load_default()
-            
-        color_texto = (255, 255, 255)
-        
-        # Extraer datos del Excel
-        nombre_ic = str(datos.get('[Pregunta 1]', 'Desconocido'))
-        fecha_completa = str(datos.get('Fecha', '01/01/2026 00:00'))
-        nivel = str(datos.get('[Pregunta 2]', '0'))
-        pais = str(datos.get('[Pregunta 4]', 'Desconocido'))
-        nr_carnet = str(datos.get('[Pregunta 5]', '000000'))
-        
-        # Formatear datos
-        fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
-        nr_formateado = f"#{nr_carnet}"
-        
-        # Coordenadas ajustadas (X común para alineación)
-        X_CAMPOS = 550
-        
-        # Dibujar los textos
-        draw.text((X_CAMPOS, 380), nombre_ic, fill=color_texto, font=font)
-        draw.text((X_CAMPOS, 450), nr_formateado, fill=color_texto, font=font)
-        draw.text((X_CAMPOS, 520), fecha_solo, fill=color_texto, font=font_pequeno)
-        draw.text((X_CAMPOS, 590), nivel, fill=color_texto, font=font)
-        draw.text((X_CAMPOS, 660), pais, fill=color_texto, font=font_pequeno)
-        
-        # Guardar en memoria
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-        
-        return img_byte_arr
-        
-    except Exception as e:
-        print(f"🚨 Error generando imagen: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-@bot.tree.command(name="carnet", description="Generar carnet oficial del miembro")
-async def carnet_comando(interaction: discord.Interaction, usuario: discord.Member):
+# ==========================================
+# 8. COMANDO FICHA (EN FORMATO EMBED)
+# ==========================================
+@bot.tree.command(name="ficha", description="Mostrar ficha oficial del miembro")
+async def ficha_comando(interaction: discord.Interaction, usuario: discord.Member):
     await interaction.response.defer(ephemeral=True)
     
     # Buscar datos en Excel
@@ -634,72 +574,32 @@ async def carnet_comando(interaction: discord.Interaction, usuario: discord.Memb
             break
             
     if not ficha:
-        return await interaction.followup.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
+        return await interaction.followup.send(f"❌ **{usuario.mention}** no tiene ficha registrada en la base de datos.", ephemeral=True)
     
-    # Generar imagen llamando a la función unificada
-    img_bytes = generar_carnet_imagen(ficha)
+    # Extraer datos
+    nombre_ic = str(ficha.get('[Pregunta 1]', 'Desconocido'))
+    nivel = str(ficha.get('[Pregunta 2]', '0'))
+    pais = str(ficha.get('[Pregunta 4]', 'Desconocido'))
+    nr_ficha = str(ficha.get('[Pregunta 5]', '000000'))
+    fecha_completa = str(ficha.get('Fecha', '01/01/2026 00:00'))
+    fecha_solo = fecha_completa.split(' ')[0] if ' ' in fecha_completa else fecha_completa
     
-    if not img_bytes:
-        return await interaction.followup.send("🚨 Hubo un error al generar la imagen. Revisa los logs.", ephemeral=True)
+    # Crear embed estilo ficha
+    embed = discord.Embed(
+        title="📋 FICHA OFICIAL - JINETES MC",
+        color=discord.Color.gold()
+    )
+    embed.set_thumbnail(url=usuario.display_avatar.url)
+    embed.add_field(name="👤 Nombre IC", value=f"**{nombre_ic}**", inline=False)
+    embed.add_field(name="🔢 Nr. de Ficha", value=f"**#{nr_ficha}**", inline=True)
+    embed.add_field(name="🎮 Nivel", value=f"**{nivel}**", inline=True)
+    embed.add_field(name="📅 Fecha de Ingreso", value=f"**{fecha_solo}**", inline=False)
+    embed.add_field(name="🌍 País", value=f"**{pais}**", inline=True)
+    embed.add_field(name="💬 Discord", value=f"**{usuario.mention}**", inline=True)
+    embed.set_footer(text=f"ID: {usuario.id} | Jinetes MC")
+    embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
     
-    archivo = discord.File(img_bytes, filename=f"carnet_{usuario.name}.png")
-    await interaction.followup.send(f"🪪 **Carnet oficial de {usuario.mention}**", file=archivo, ephemeral=True)
-
-# ==========================================
-# 9. COMANDOS DE PREFIJO Y CRONOGRAMA
-# ==========================================
-@bot.event
-async def on_message(message):
-    if message.author.bot or not message.content.startswith(PREFIX): return
-    args = message.content[len(PREFIX):].strip().split()
-    if not args: return
-    comando_nombre = args[0].lower()
-    if comando_nombre in COMANDOS_CONFIG:
-        config = COMANDOS_CONFIG[comando_nombre]
-        if str(config.get('Activo', '')).upper() == 'SI':
-            funcion = config.get('Funcion', '')
-            if funcion == 'menu_ayuda': await ejecutar_menu_ayuda(message)
-            elif funcion == 'radar_geto': await ejecutar_radar(message)
-
-@tasks.loop(seconds=30)
-async def verificador_tiempo_radar():
-    global radar_abierto_al_publico, ultimo_radar_message_id, canal_radar_id
-    if not canal_radar_id:
-        canal_id_str = cargar_config_general().get('CANAL_RADAR_ID', '')
-        if canal_id_str: canal_radar_id = int(canal_id_str)
-        else: return
-    ahora = datetime.datetime.now(datetime.timezone.utc)
-    if ahora.weekday() in DIAS_ACTIVIDAD:
-        for h in HORAS_ACTIVIDAD:
-            h_apertura = h - 1 if h > 0 else 23
-            if ahora.hour == h_apertura and ahora.minute < 5 and not radar_abierto_al_publico:
-                radar_abierto_al_publico = True
-                try:
-                    canal = bot.get_channel(canal_radar_id)
-                    if canal:
-                        await canal.send(f"🔓 **[SISTEMA]:** Posiciones abiertas para la actividad de las **{h}:00 UTC**. ¡Asignen zonas!")
-                        await actualizar_radar_en_canal(canal)
-                except Exception as e: print(f"Error al abrir radar: {e}")
-                break
-        for h in HORAS_ACTIVIDAD:
-            if ahora.hour == h and ahora.minute == 5:
-                if radar_abierto_al_publico or any(RADAR_DESPLIEGUE.values()):
-                    radar_abierto_al_publico = False
-                    try:
-                        canal = bot.get_channel(canal_radar_id)
-                        if canal:
-                            await canal.send(f"🗃️ **ARCHIVO DE OPERACIONES AUTOMÁTICO**\n📅 **Fecha:** {ahora.strftime('%d/%m/%Y')}\n⏱️ **Actividad:** {h}:00 UTC\n🔒 **Estado:** Cuadrante Bloqueado\n📋 **Despliegue Final:**\n{generar_mapa_texto()}")
-                            for zona in RADAR_DESPLIEGUE: RADAR_DESPLIEGUE[zona] = None
-                            await actualizar_radar_en_canal(canal)
-                    except Exception as e: print(f"Error al cerrar radar: {e}")
-                    break
-
-@tasks.loop(minutes=5)
-async def ping_keeping_alive():
-    try:
-        if bot.is_ready(): print(f"💓 Ping - Bot conectado. Latencia: {round(bot.latency * 1000)}ms")
-        else: print("⚠️ Ping - Bot NO está listo")
-    except Exception as e: print(f"Error en ping: {e}")
+    await interaction.followup.send(f"📋 **Ficha de {usuario.mention}**", embed=embed, ephemeral=True)
 
 # ==========================================
 # 10. SERVIDOR WEB + RECONEXIÓN
