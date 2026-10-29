@@ -1129,12 +1129,17 @@ async def ping_keeping_alive():
 # 11. SERVIDOR WEB + RECONEXIÓN
 # ==========================================
 server_app = Flask(__name__)
+
 @server_app.route('/')
-def home(): return "Bot Jinetes MC Activo 24/7 ✅", 200
+def home():
+    return "Bot Jinetes MC Activo 24/7 ✅", 200
+
 @server_app.route('/health')
 def health():
-    if bot.is_ready(): return jsonify({"status": "ok", "bot": "connected"}), 200
-    else: return jsonify({"status": "error", "bot": "disconnected"}), 503
+    if bot.is_ready():
+        return jsonify({"status": "ok", "bot": "connected"}), 200
+    else:
+        return jsonify({"status": "error", "bot": "disconnected"}), 503
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
