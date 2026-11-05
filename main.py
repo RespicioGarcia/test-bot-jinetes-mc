@@ -465,35 +465,67 @@ class MenuDesplegableView(discord.ui.View):
         self.add_item(continuar_btn)
 
 class FormularioReclutaModal(discord.ui.Modal):
-    """Modal antiguo con paginación de 5 en 5"""
     def __init__(self, usuario, canal_ticket, respuestas_desplegables):
         self.usuario = usuario
         self.canal_ticket = canal_ticket
         self.respuestas_desplegables = respuestas_desplegables
         self.pagina_actual = 1
-        self.total_paginas = (len(PREGUNTAS_RECLUTAMIENTO) + 4) // 5
+        self.total_paginas = max(1, (len(PREGUNTAS_RECLUTAMIENTO) + 4) // 5)
         self.respuestas_previas = []
         
-        super().__init__(title=f"Solicitud ({self.pagina_actual}/{self.total_paginas})")
+        # Añadimos custom_id explícito para evitar errores de generación
+        super().__init__(title=f"Solicitud ({self.pagina_actual}/{self.total_paginas})", custom_id=f"recluta_modal_p{self.pagina_actual}")
         
         inicio = 0
         fin = 5
         preguntas_pagina = PREGUNTAS_RECLUTAMIENTO[inicio:fin]
         
+        # FALBACK: Si por alguna razón no hay preguntas, evitamos que el modal esté vacío (lo que causa el error)
+        if not preguntas_pagina:
+            self.add_item(discord.ui.TextInput(
+                custom_id="pregunta_fallback",
+                label="Sin preguntas configuradas", 
+                placeholder="Contacta a un administrador.", 
+                required=False, 
+                style=discord.TextStyle.short, 
+                max_length=100
+            ))
+            return
+
         for i, p in enumerate(preguntas_pagina):
             try:
                 pregunta = str(p.get('Pregunta', f'Pregunta {i+1}'))
                 placeholder = str(p.get('Placeholder', 'Escribe tu respuesta...'))
                 obligatoria = str(p.get('Obligatoria', 'NO')).upper() == 'SI'
                 estilo = discord.TextStyle.paragraph if any(palabra in pregunta.lower() for palabra in ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'detalla', 'describe']) else discord.TextStyle.short
-                pregunta_limpia = pregunta.rstrip('*').strip()[:37] + ("..." if len(pregunta) > 40 else "")
-                label_final = f"{pregunta_limpia}{'*' if obligatoria else ''}"
+                
+                # LÍMITES ESTRICTOS DE DISCORD: Label máximo 45 caracteres
+                label_base = pregunta.rstrip('*').strip()
+                if len(label_base) > 44:
+                    label_base = label_base[:41] + "..."
+                label_final = f"{label_base}{'*' if obligatoria else ''}"
+                
                 placeholder = (placeholder.strip() or 'Escribe aquí...')[:100]
                 max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
-                self.add_item(discord.ui.TextInput(label=label_final, placeholder=placeholder, required=obligatoria, style=estilo, max_length=max_len))
+                
+                self.add_item(discord.ui.TextInput(
+                    custom_id=f"pregunta_{i}",
+                    label=label_final, 
+                    placeholder=placeholder, 
+                    required=obligatoria, 
+                    style=estilo, 
+                    max_length=max_len
+                ))
             except Exception as e:
                 print(f"❌ Error en campo {i}: {e}")
-                self.add_item(discord.ui.TextInput(label=f"Pregunta {i+1}", placeholder="Escribe aquí...", required=False, style=discord.TextStyle.short, max_length=100))
+                self.add_item(discord.ui.TextInput(
+                    custom_id=f"pregunta_error_{i}",
+                    label=f"Pregunta {i+1}", 
+                    placeholder="Escribe aquí...", 
+                    required=False, 
+                    style=discord.TextStyle.short, 
+                    max_length=100
+                ))
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -518,8 +550,8 @@ class FormularioReclutaModal(discord.ui.Modal):
             print(f"🚨 ERROR EN MODAL: {e}")
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
+
 class FormularioReclutaModalPaginado(discord.ui.Modal):
-    """Modal para páginas 2 en adelante"""
     def __init__(self, usuario, canal_ticket, respuestas_desplegables, preguntas, pagina_actual, total_paginas, respuestas_previas):
         self.usuario = usuario
         self.canal_ticket = canal_ticket
@@ -528,22 +560,54 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
         self.total_paginas = total_paginas
         self.respuestas_previas = respuestas_previas
         
-        super().__init__(title=f"Solicitud ({pagina_actual}/{total_paginas})")
+        super().__init__(title=f"Solicitud ({pagina_actual}/{total_paginas})", custom_id=f"recluta_modal_p{pagina_actual}")
         
+        # FALBACK por seguridad
+        if not preguntas:
+            self.add_item(discord.ui.TextInput(
+                custom_id="pregunta_fallback",
+                label="Sin más preguntas", 
+                placeholder="Fin del formulario.", 
+                required=False, 
+                style=discord.TextStyle.short, 
+                max_length=100
+            ))
+            return
+
         for i, p in enumerate(preguntas):
             try:
                 pregunta = str(p.get('Pregunta', f'Pregunta {i+1}'))
                 placeholder = str(p.get('Placeholder', 'Escribe tu respuesta...'))
                 obligatoria = str(p.get('Obligatoria', 'NO')).upper() == 'SI'
                 estilo = discord.TextStyle.paragraph if any(palabra in pregunta.lower() for palabra in ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'detalla', 'describe']) else discord.TextStyle.short
-                pregunta_limpia = pregunta.rstrip('*').strip()[:37] + ("..." if len(pregunta) > 40 else "")
-                label_final = f"{pregunta_limpia}{'*' if obligatoria else ''}"
+                
+                # LÍMITES ESTRICTOS DE DISCORD: Label máximo 45 caracteres
+                label_base = pregunta.rstrip('*').strip()
+                if len(label_base) > 44:
+                    label_base = label_base[:41] + "..."
+                label_final = f"{label_base}{'*' if obligatoria else ''}"
+                
                 placeholder = (placeholder.strip() or 'Escribe aquí...')[:100]
                 max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
-                self.add_item(discord.ui.TextInput(label=label_final, placeholder=placeholder, required=obligatoria, style=estilo, max_length=max_len))
+                
+                self.add_item(discord.ui.TextInput(
+                    custom_id=f"pregunta_pag{pagina_actual}_{i}",
+                    label=label_final, 
+                    placeholder=placeholder, 
+                    required=obligatoria, 
+                    style=estilo, 
+                    max_length=max_len
+                ))
             except Exception as e:
                 print(f"❌ Error en campo {i}: {e}")
-                self.add_item(discord.ui.TextInput(label=f"Pregunta {i+1}", placeholder="Escribe aquí...", required=False, style=discord.TextStyle.short, max_length=100))
+                self.add_item(discord.ui.TextInput(
+                    custom_id=f"pregunta_error_pag{pagina_actual}_{i}",
+                    label=f"Pregunta {i+1}", 
+                    placeholder="Escribe aquí...", 
+                    required=False, 
+                    style=discord.TextStyle.short, 
+                    max_length=100
+                ))
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -567,7 +631,6 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
         except Exception as e:
             print(f"🚨 ERROR EN MODAL: {e}")
             await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
-
 async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas_desplegables):
     """Construye el embed usando el sistema antiguo + añade campos de desplegables"""
     config = cargar_config_reclutamiento()
