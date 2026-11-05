@@ -14,7 +14,7 @@ intents = discord.Intents.all()
 intents.message_content = True
 bot = commands.Bot(command_prefix="-", intents=intents)
 
-# 3. Inyectar el Data Manager en el bot (¡Adiós variables globales!)
+# 3. Inyectar el Data Manager en el bot
 bot.data_manager = DataManager()
 bot.data_manager.cargar_todo()
 
@@ -27,10 +27,11 @@ async def setup_hook():
 
 bot.setup_hook = setup_hook
 
-# 5. Servidor Web (Flask) para mantener vivo el bot
+# 5. Servidor Web (Flask)
 app = Flask(__name__)
 @app.route('/')
 def home(): return "Bot Jinetes MC Activo 24/7 ✅", 200
+
 @app.route('/health')
 def health():
     return jsonify({"status": "ok" if bot.is_ready() else "error"}), 200 if bot.is_ready() else 503
