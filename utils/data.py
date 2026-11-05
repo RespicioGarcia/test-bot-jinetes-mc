@@ -184,10 +184,15 @@ def cargar_mensajes_config():
             CACHE_MENSAJES[clave] = valor
     return CACHE_MENSAJES
 
-# Función helper para que los cogs puedan enviar logs fácilmente
-async def enviar_log(bot, tipo_log, mensaje, color):
+# Función helper para que los cogs y el main puedan enviar logs fácilmente
+async def enviar_log(tipo_log, mensaje, color):
     import discord
     import datetime
+    import sys
+    
+    # Obtenemos la instancia del bot desde el archivo principal (main.py)
+    bot = sys.modules['__main__'].bot
+    
     if not CACHE_LOGS:
         cargar_logs_config()
     
