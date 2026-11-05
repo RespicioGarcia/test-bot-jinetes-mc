@@ -46,10 +46,6 @@ cargar_mensajes_config()
 print("✅ Todos los datos cargados correctamente.")
 
 # ==========================================
-# 4. BOT Y EVENTOS (AQUÍ CONTINÚA TU CÓDIGO ORIGINAL)
-# ==========================================
-
-# ==========================================
 # 4. BOT Y EVENTOS
 # ==========================================
 intents = discord.Intents.all()
@@ -256,8 +252,6 @@ async def ejecutar_menu_ayuda(message):
 # 6. RADAR
 # ==========================================
 def generar_mapa_texto():
-    from utils.data import CACHE_CONFIG, CACHE_ZONAS, RADAR_DESPLIEGUE
-    
     config = cargar_config_general()
     estado = config.get('MENSAJE_ABIERTO', '🟢 ACTIVO') if radar_abierto_al_publico else config.get('MENSAJE_CERRADO', '🔴 EN ESPERA')
     lineas_zonas = []
@@ -266,7 +260,7 @@ def generar_mapa_texto():
         lineas_zonas.append(f"  • {emoji} {zona.ljust(15)} {usuario if usuario else '[ VACÍO ] ️'}")
     return (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f" {config.get('TITULO_RADAR', '️ JINETES MC • RADAR DE ZONAS')}\n"
+        f" {config.get('TITULO_RADAR', '🏍️ JINETES MC • RADAR DE ZONAS')}\n"
         "     Control de Despliegue en Tiempo Real\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🗺️  DESPLIEGUE EN VIVO (ZONAS ASIGNADAS)\n"
@@ -280,19 +274,14 @@ class RadarControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-       @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
+    @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
     async def asignar_posicion(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # AÑADE ESTA LÍNEA AL PRINCIPIO
-        from utils.data import RADAR_DESPLIEGUE, radar_abierto_al_publico
-        
-        # A PARTIR DE AQUÍ, DEJA TU CÓDIGO ORIGINAL EXACTAMENTE IGUAL
         if not radar_abierto_al_publico:
             return await interaction.response.send_message("❌ El radar está cerrado.", ephemeral=True)
             
         opciones = [discord.SelectOption(label=zona, value=zona) for zona in RADAR_DESPLIEGUE.keys()]
         opciones.append(discord.SelectOption(label="🚪 Salir de Servicio", value="Retirarse"))
         
-        # ... y el resto de tu código original del select ...
         view = discord.ui.View(timeout=60)
         select = discord.ui.Select(placeholder="📍 Elige tu punto de despliegue...", options=opciones)
         
@@ -314,6 +303,7 @@ class RadarControlView(discord.ui.View):
                 await enviar_log("radar", f"🚪 {user_mention} ha salido del servicio", discord.Color.orange())
                 await sel_interaction.followup.send("❌ Has salido del servicio.", ephemeral=True)
             await actualizar_radar_en_canal(sel_interaction.channel)
+            
         select.callback = select_callback
         view.add_item(select)
         await interaction.response.send_message("Selecciona tu zona:", view=view, ephemeral=True)
@@ -820,17 +810,16 @@ class BienvenidaReclutaView(discord.ui.View):
     def __init__(self, usuario):
         super().__init__(timeout=None)
         self.usuario = usuario
+        
     @discord.ui.button(label="📝 Rellenar solicitud de ingreso", style=discord.ButtonStyle.primary, custom_id="recluta:formulario")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.usuario: return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
+        if interaction.user != self.usuario: 
+            return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
         preguntas = cargar_preguntas_reclutamiento()
-        if not preguntas: return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
+        if not preguntas: 
+            return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
         await interaction.response.send_modal(FormularioReclutaModal(self.usuario, interaction.channel, {}))
 
-async def enviar_bienvenida_recluta(canal, usuario):
-    config = cargar_config_reclutamiento()
-    
-    # Si hay preguntas desplegables configuradas, enviar menús primero
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
     
@@ -859,12 +848,10 @@ async def enviar_bienvenida_recluta(canal, usuario):
         mensaje_final = mensaje_base.replace('{user}', usuario.mention)
         view = BienvenidaReclutaView(usuario)
         await canal.send(content=mensaje_final, view=view)
-   
 
 # ==========================================
 # 9. COMANDO FICHA
 # ==========================================
-
 @bot.tree.command(name="ficha", description="Mostrar ficha oficial del miembro")
 async def ficha_comando(interaction: discord.Interaction, usuario: discord.Member):
     await interaction.response.defer(ephemeral=True)
@@ -914,29 +901,36 @@ async def ficha_comando(interaction: discord.Interaction, usuario: discord.Membe
     embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
     
     await interaction.followup.send(f" **Ficha de {usuario.mention}**", embed=embed, ephemeral=True)
+
 # ==========================================
 # 10. COMANDOS DE PREFIJO Y CRONOGRAMA
 # ==========================================
 @bot.event
 async def on_message(message):
-    if message.author.bot or not message.content.startswith(PREFIX): return
+    if message.author.bot or not message.content.startswith(PREFIX): 
+        return
     args = message.content[len(PREFIX):].strip().split()
-    if not args: return
+    if not args: 
+        return
     comando_nombre = args[0].lower()
     if comando_nombre in COMANDOS_CONFIG:
         config = COMANDOS_CONFIG[comando_nombre]
         if str(config.get('Activo', '')).upper() == 'SI':
             funcion = config.get('Funcion', '')
-            if funcion == 'menu_ayuda': await ejecutar_menu_ayuda(message)
-            elif funcion == 'radar_geto': await ejecutar_radar(message)
+            if funcion == 'menu_ayuda': 
+                await ejecutar_menu_ayuda(message)
+            elif funcion == 'radar_geto': 
+                await ejecutar_radar(message)
 
 @tasks.loop(seconds=30)
 async def verificador_tiempo_radar():
     global radar_abierto_al_publico, ultimo_radar_message_id, canal_radar_id
     if not canal_radar_id:
         canal_id_str = cargar_config_general().get('CANAL_RADAR_ID', '')
-        if canal_id_str: canal_radar_id = int(canal_id_str)
-        else: return
+        if canal_id_str: 
+            canal_radar_id = int(canal_id_str)
+        else: 
+            return
     ahora = datetime.datetime.now(datetime.timezone.utc)
     if ahora.weekday() in DIAS_ACTIVIDAD:
         for h in HORAS_ACTIVIDAD:
@@ -949,7 +943,8 @@ async def verificador_tiempo_radar():
                         await canal.send(f"🔓 **[SISTEMA]:** Posiciones abiertas para la actividad de las **{h}:00 UTC**. ¡Asignen zonas!")
                         await enviar_log("radar", f"🔓 Radar abierto automáticamente para las {h}:00 UTC", discord.Color.green())
                         await actualizar_radar_en_canal(canal)
-                except Exception as e: print(f"Error al abrir radar: {e}")
+                except Exception as e: 
+                    print(f"Error al abrir radar: {e}")
                 break
         for h in HORAS_ACTIVIDAD:
             if ahora.hour == h and ahora.minute == 5:
@@ -959,18 +954,23 @@ async def verificador_tiempo_radar():
                         canal = bot.get_channel(canal_radar_id)
                         if canal:
                             await canal.send(f"🗃️ **ARCHIVO DE OPERACIONES AUTOMÁTICO**\n📅 **Fecha:** {ahora.strftime('%d/%m/%Y')}\n️ **Actividad:** {h}:00 UTC\n🔒 **Estado:** Cuadrante Bloqueado\n📋 **Despliegue Final:**\n{generar_mapa_texto()}")
-                            for zona in RADAR_DESPLIEGUE: RADAR_DESPLIEGUE[zona] = None
+                            for zona in RADAR_DESPLIEGUE: 
+                                RADAR_DESPLIEGUE[zona] = None
                             await enviar_log("radar", f"🔒 Radar cerrado automáticamente - Actividad {h}:00 UTC", discord.Color.red())
                             await actualizar_radar_en_canal(canal)
-                    except Exception as e: print(f"Error al cerrar radar: {e}")
+                    except Exception as e: 
+                        print(f"Error al cerrar radar: {e}")
                     break
 
 @tasks.loop(minutes=5)
 async def ping_keeping_alive():
     try:
-        if bot.is_ready(): print(f"💓 Ping - Bot conectado. Latencia: {round(bot.latency * 1000)}ms")
-        else: print("️ Ping - Bot NO está listo")
-    except Exception as e: print(f"Error en ping: {e}")
+        if bot.is_ready(): 
+            print(f"💓 Ping - Bot conectado. Latencia: {round(bot.latency * 1000)}ms")
+        else: 
+            print("️ Ping - Bot NO está listo")
+    except Exception as e: 
+        print(f"Error en ping: {e}")
 
 # ==========================================
 # 11. SERVIDOR WEB + RECONEXIÓN
