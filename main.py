@@ -44,6 +44,10 @@ cargar_roles_auto()
 time.sleep(0.5)
 cargar_mensajes_config()
 print("✅ Todos los datos cargados correctamente.")
+print(f" DEBUG: Preguntas reclutamiento: {len(PREGUNTAS_RECLUTAMIENTO)}")
+
+for i, p in enumerate(PREGUNTAS_RECLUTAMIENTO[:3]):  # Muestra las primeras 3
+    print(f"   {i+1}. {p.get('Pregunta')}")
 
 # ==========================================
 # 4. BOT Y EVENTOS
