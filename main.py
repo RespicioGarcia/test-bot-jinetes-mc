@@ -1036,6 +1036,7 @@ async def enviar_bienvenida_recluta(canal, usuario):
 # ==========================================
 # 9. COMANDO FICHA
 # ==========================================
+
 @bot.tree.command(name="ficha", description="Mostrar ficha oficial del miembro")
 async def ficha_comando(interaction: discord.Interaction, usuario: discord.Member):
     await interaction.response.defer(ephemeral=True)
@@ -1050,18 +1051,41 @@ async def ficha_comando(interaction: discord.Interaction, usuario: discord.Membe
     if not ficha:
         return await interaction.followup.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
     
+    # Cargar las preguntas con la nueva columna Nombre_Ficha
+    preguntas_config = cargar_preguntas_reclutamiento()
+    
     embed = discord.Embed(title="📋 FICHA OFICIAL - JINETES MC", color=discord.Color.gold())
     embed.set_thumbnail(url=usuario.display_avatar.url)
     
-    for key, value in ficha.items():
-        if value and key not in ['Fecha', 'Usuario_Discord', 'ID_Usuario', 'Canal_Ticket', 'Estado']:
-            embed.add_field(name=f"📌 {key}", value=f"**{value}**", inline=False)
+    # Mostrar campos fijos primero
+    if ficha.get('Fecha'):
+        embed.add_field(name="📅 Fecha de Registro", value=f"**{ficha['Fecha']}**", inline=False)
+    if ficha.get('Usuario_Discord'):
+        embed.add_field(name="👤 Usuario", value=f"**{ficha['Usuario_Discord']}**", inline=False)
+    if ficha.get('Estado'):
+        embed.add_field(name="📊 Estado", value=f"**{ficha['Estado']}**", inline=False)
+    
+    # Separador visual
+    embed.add_field(name="━━━━━━━━━━━━━━━━━━━━", value="📝 **RESPUESTAS DEL FORMULARIO**", inline=False)
+    
+    # Mostrar preguntas usando la columna Nombre_Ficha
+    for i, preg in enumerate(preguntas_config, start=1):
+        # Usar Nombre_Ficha si existe, si no, usar el nombre de la pregunta
+        nombre_mostrar = preg.get('Nombre_Ficha', '')
+        if not nombre_mostrar:
+            nombre_mostrar = preg.get('Pregunta', f'Pregunta {i}')
+        
+        # Buscar el valor en la ficha por el índice de la pregunta
+        clave_columna = f'[Pregunta {i}]'
+        valor = ficha.get(clave_columna, '')
+        
+        if valor:
+            embed.add_field(name=f"📌 {nombre_mostrar}", value=f"**{valor}**", inline=False)
     
     embed.set_footer(text=f"ID: {usuario.id}")
     embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
     
     await interaction.followup.send(f" **Ficha de {usuario.mention}**", embed=embed, ephemeral=True)
-
 # ==========================================
 # 10. COMANDOS DE PREFIJO Y CRONOGRAMA
 # ==========================================
