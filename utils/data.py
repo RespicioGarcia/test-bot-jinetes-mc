@@ -104,12 +104,30 @@ def cargar_config_reclutamiento():
 
 def cargar_preguntas_reclutamiento():
     global PREGUNTAS_RECLUTAMIENTO
+    
+    print("🔍 DEBUG: Leyendo hoja Config_Recluta_Preguntas...")
     records = sheet_recluta_preguntas.get_all_records()
-    preguntas = [r for r in records if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0]
-    preguntas.sort(key=lambda x: int(x.get('Orden', 0)))
+    print(f"🔍 DEBUG: Total de filas leídas: {len(records)}")
+    
+    # Mostrar las primeras 3 filas para ver qué llega
+    for i, r in enumerate(records[:3]):
+        print(f"🔍 DEBUG Fila {i}: {r}")
+    
+    # Filtrar preguntas válidas (con Orden numérico mayor que 0)
+    preguntas = []
+    for r in records:
+        orden_str = str(r.get('Orden', '')).strip()
+        print(f"🔍 DEBUG: Orden='{orden_str}', es_digito={orden_str.isdigit()}")
+        
+        if orden_str.isdigit() and int(orden_str) > 0:
+            preguntas.append(r)
+    
+    preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
     PREGUNTAS_RECLUTAMIENTO = preguntas
+    
+    print(f"✅ DEBUG: Preguntas válidas encontradas: {len(PREGUNTAS_RECLUTAMIENTO)}")
     return PREGUNTAS_RECLUTAMIENTO
-
+    
 def cargar_preguntas_desplegables():
     global PREGUNTAS_DESPLEGABLES
     records = sheet_preguntas_desplegables.get_all_records()
