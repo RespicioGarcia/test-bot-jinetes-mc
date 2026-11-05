@@ -465,29 +465,31 @@ class MenuDesplegableView(discord.ui.View):
         self.add_item(continuar_btn)
 
 class FormularioReclutaModal(discord.ui.Modal):
+    """Modal antiguo con paginación de 5 en 5"""
     def __init__(self, usuario, canal_ticket, respuestas_desplegables):
         self.usuario = usuario
         self.canal_ticket = canal_ticket
         self.respuestas_desplegables = respuestas_desplegables
         self.pagina_actual = 1
+        # Aseguramos que siempre haya al menos 1 página
         self.total_paginas = max(1, (len(PREGUNTAS_RECLUTAMIENTO) + 4) // 5)
         self.respuestas_previas = []
         
-        # Añadimos custom_id explícito para evitar errores de generación
-        super().__init__(title=f"Solicitud ({self.pagina_actual}/{self.total_paginas})", custom_id=f"recluta_modal_p{self.pagina_actual}")
+        # Añadimos custom_id explícito para evitar conflictos de estado
+        super().__init__(title=f"Solicitud ({self.pagina_actual}/{self.total_paginas})", custom_id=f"recluta_modal_p1")
         
         inicio = 0
         fin = 5
         preguntas_pagina = PREGUNTAS_RECLUTAMIENTO[inicio:fin]
         
-        # FALBACK: Si por alguna razón no hay preguntas, evitamos que el modal esté vacío (lo que causa el error)
+        # FALLBACK DE SEGURIDAD: Discord exige al menos 1 componente. Si no hay preguntas, ponemos una dummy.
         if not preguntas_pagina:
             self.add_item(discord.ui.TextInput(
-                custom_id="pregunta_fallback",
-                label="Sin preguntas configuradas", 
-                placeholder="Contacta a un administrador.", 
-                required=False, 
-                style=discord.TextStyle.short, 
+                custom_id="fallback_p1",
+                label="No hay preguntas configuradas",
+                placeholder="Contacta a un administrador.",
+                required=False,
+                style=discord.TextStyle.short,
                 max_length=100
             ))
             return
@@ -499,31 +501,31 @@ class FormularioReclutaModal(discord.ui.Modal):
                 obligatoria = str(p.get('Obligatoria', 'NO')).upper() == 'SI'
                 estilo = discord.TextStyle.paragraph if any(palabra in pregunta.lower() for palabra in ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'detalla', 'describe']) else discord.TextStyle.short
                 
-                # LÍMITES ESTRICTOS DE DISCORD: Label máximo 45 caracteres
+                # CONTROL ESTRICTO DE LONGITUD (Máximo 45 caracteres en Discord)
                 label_base = pregunta.rstrip('*').strip()
-                if len(label_base) > 44:
-                    label_base = label_base[:41] + "..."
-                label_final = f"{label_base}{'*' if obligatoria else ''}"
+                if len(label_base) > 43:
+                    label_base = label_base[:40] + "..."
                 
+                label_final = f"{label_base}{'*' if obligatoria else ''}"
                 placeholder = (placeholder.strip() or 'Escribe aquí...')[:100]
                 max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
                 
                 self.add_item(discord.ui.TextInput(
-                    custom_id=f"pregunta_{i}",
-                    label=label_final, 
-                    placeholder=placeholder, 
-                    required=obligatoria, 
-                    style=estilo, 
+                    custom_id=f"pregunta_p1_{i}",
+                    label=label_final,
+                    placeholder=placeholder,
+                    required=obligatoria,
+                    style=estilo,
                     max_length=max_len
                 ))
             except Exception as e:
                 print(f"❌ Error en campo {i}: {e}")
                 self.add_item(discord.ui.TextInput(
-                    custom_id=f"pregunta_error_{i}",
-                    label=f"Pregunta {i+1}", 
-                    placeholder="Escribe aquí...", 
-                    required=False, 
-                    style=discord.TextStyle.short, 
+                    custom_id=f"error_p1_{i}",
+                    label=f"Pregunta {i+1}",
+                    placeholder="Escribe aquí...",
+                    required=False,
+                    style=discord.TextStyle.short,
                     max_length=100
                 ))
 
@@ -552,6 +554,7 @@ class FormularioReclutaModal(discord.ui.Modal):
 
 
 class FormularioReclutaModalPaginado(discord.ui.Modal):
+    """Modal para páginas 2 en adelante"""
     def __init__(self, usuario, canal_ticket, respuestas_desplegables, preguntas, pagina_actual, total_paginas, respuestas_previas):
         self.usuario = usuario
         self.canal_ticket = canal_ticket
@@ -562,14 +565,14 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
         
         super().__init__(title=f"Solicitud ({pagina_actual}/{total_paginas})", custom_id=f"recluta_modal_p{pagina_actual}")
         
-        # FALBACK por seguridad
+        # FALLBACK DE SEGURIDAD
         if not preguntas:
             self.add_item(discord.ui.TextInput(
-                custom_id="pregunta_fallback",
-                label="Sin más preguntas", 
-                placeholder="Fin del formulario.", 
-                required=False, 
-                style=discord.TextStyle.short, 
+                custom_id=f"fallback_p{pagina_actual}",
+                label="No hay más preguntas",
+                placeholder="Fin del formulario.",
+                required=False,
+                style=discord.TextStyle.short,
                 max_length=100
             ))
             return
@@ -581,31 +584,31 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
                 obligatoria = str(p.get('Obligatoria', 'NO')).upper() == 'SI'
                 estilo = discord.TextStyle.paragraph if any(palabra in pregunta.lower() for palabra in ['larga', 'motivación', 'experiencia', 'historia', 'backstory', 'por qué', 'detalla', 'describe']) else discord.TextStyle.short
                 
-                # LÍMITES ESTRICTOS DE DISCORD: Label máximo 45 caracteres
+                # CONTROL ESTRICTO DE LONGITUD (Máximo 45 caracteres en Discord)
                 label_base = pregunta.rstrip('*').strip()
-                if len(label_base) > 44:
-                    label_base = label_base[:41] + "..."
-                label_final = f"{label_base}{'*' if obligatoria else ''}"
+                if len(label_base) > 43:
+                    label_base = label_base[:40] + "..."
                 
+                label_final = f"{label_base}{'*' if obligatoria else ''}"
                 placeholder = (placeholder.strip() or 'Escribe aquí...')[:100]
                 max_len = 4000 if estilo == discord.TextStyle.paragraph else 100
                 
                 self.add_item(discord.ui.TextInput(
-                    custom_id=f"pregunta_pag{pagina_actual}_{i}",
-                    label=label_final, 
-                    placeholder=placeholder, 
-                    required=obligatoria, 
-                    style=estilo, 
+                    custom_id=f"pregunta_p{pagina_actual}_{i}",
+                    label=label_final,
+                    placeholder=placeholder,
+                    required=obligatoria,
+                    style=estilo,
                     max_length=max_len
                 ))
             except Exception as e:
                 print(f"❌ Error en campo {i}: {e}")
                 self.add_item(discord.ui.TextInput(
-                    custom_id=f"pregunta_error_pag{pagina_actual}_{i}",
-                    label=f"Pregunta {i+1}", 
-                    placeholder="Escribe aquí...", 
-                    required=False, 
-                    style=discord.TextStyle.short, 
+                    custom_id=f"error_p{pagina_actual}_{i}",
+                    label=f"Pregunta {i+1}",
+                    placeholder="Escribe aquí...",
+                    required=False,
+                    style=discord.TextStyle.short,
                     max_length=100
                 ))
 
