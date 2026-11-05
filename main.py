@@ -251,7 +251,10 @@ async def ejecutar_menu_ayuda(message):
 # ==========================================
 # 6. RADAR
 # ==========================================
+
 def generar_mapa_texto():
+    from utils.data import CACHE_CONFIG, CACHE_ZONAS, RADAR_DESPLIEGUE
+    
     config = cargar_config_general()
     estado = config.get('MENSAJE_ABIERTO', '🟢 ACTIVO') if radar_abierto_al_publico else config.get('MENSAJE_CERRADO', '🔴 EN ESPERA')
     lineas_zonas = []
@@ -267,7 +270,7 @@ def generar_mapa_texto():
         " ─────────────────────────────────────────────────────\n"
         + "\n".join(lineas_zonas) +
         "\n ─────────────────────────────────────────────────────\n"
-        f" ⏱️  ESTADO: {estado}\n"
+        f" ️  ESTADO: {estado}\n"
     )
 
 class RadarControlView(discord.ui.View):
