@@ -130,4 +130,109 @@ def cargar_preguntas_reclutamiento():
 def cargar_preguntas_desplegables():
     global PREGUNTAS_DESPLEGABLES
     records = sheet_preguntas_desplegables.get_all_records()
-    preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit
+    preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
+    preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
+    
+    # MODIFICAMOS LA LISTA ORIGINAL EN MEMORIA
+    PREGUNTAS_DESPLEGABLES.clear()
+    PREGUNTAS_DESPLEGABLES.extend(preguntas)
+    return PREGUNTAS_DESPLEGABLES
+
+def cargar_logs_config():
+    global CACHE_LOGS
+    records = sheet_logs.get_all_records()
+    nuevo_logs = {}
+    for row in records:
+        tipo = row.get('Tipo_Log', '')
+        canal_id = row.get('Canal_ID', '')
+        if tipo and canal_id:
+            try:
+                nuevo_logs[tipo] = int(canal_id)
+            except:
+                pass
+    CACHE_LOGS.clear()
+    CACHE_LOGS.update(nuevo_logs)
+    return CACHE_LOGS
+
+def cargar_categorias_config():
+    global CACHE_CATEGORIAS
+    records = sheet_categorias.get_all_records()
+    nuevo_cats = {}
+    for row in records:
+        tipo = row.get('Tipo', '')
+        cat_id = row.get('Categoria_ID', '')
+        if tipo and cat_id:
+            try:
+                nuevo_cats[tipo] = int(cat_id)
+            except:
+                pass
+    CACHE_CATEGORIAS.clear()
+    CACHE_CATEGORIAS.update(nuevo_cats)
+    return CACHE_CATEGORIAS
+
+def cargar_roles_staff():
+    global CACHE_ROLES_STAFF
+    records = sheet_roles_staff.get_all_records()
+    nuevos_roles = []
+    for row in records:
+        rol_id = row.get('Rol_ID', '')
+        if rol_id:
+            try:
+                nuevos_roles.append(int(rol_id))
+            except:
+                pass
+    CACHE_ROLES_STAFF.clear()
+    CACHE_ROLES_STAFF.extend(nuevos_roles)
+    return CACHE_ROLES_STAFF
+
+def cargar_roles_auto():
+    global CACHE_ROLES_AUTO
+    records = sheet_roles_auto.get_all_records()
+    nuevo_auto = {}
+    for row in records:
+        accion = row.get('Accion', '')
+        rol_id = row.get('Rol_ID', '')
+        if accion and rol_id:
+            try:
+                nuevo_auto[accion] = int(rol_id)
+            except:
+                pass
+    CACHE_ROLES_AUTO.clear()
+    CACHE_ROLES_AUTO.update(nuevo_auto)
+    return CACHE_ROLES_AUTO
+
+def cargar_mensajes_config():
+    global CACHE_MENSAJES
+    records = sheet_mensajes.get_all_records()
+    nuevo_mensajes = {}
+    for row in records:
+        clave = row.get('Clave', '')
+        valor = row.get('Valor', '')
+        if clave:
+            nuevo_mensajes[clave] = valor
+    CACHE_MENSAJES.clear()
+    CACHE_MENSAJES.update(nuevo_mensajes)
+    return CACHE_MENSAJES
+
+# Función helper para enviar logs
+async def enviar_log(tipo_log, mensaje, color):
+    import sys
+    bot = sys.modules['__main__'].bot
+    
+    if not CACHE_LOGS:
+        cargar_logs_config()
+    
+    canal_id = CACHE_LOGS.get(tipo_log)
+    if not canal_id:
+        print(f"⚠️ No hay canal configurado para log: {tipo_log}")
+        return
+    
+    try:
+        canal = bot.get_channel(canal_id)
+        if not canal:
+            canal = await bot.fetch_channel(canal_id)
+        
+        embed = discord.Embed(description=mensaje, color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
+        await canal.send(embed=embed)
+    except Exception as e:
+        print(f"🚨 Error enviando log {tipo_log}: {e}")
