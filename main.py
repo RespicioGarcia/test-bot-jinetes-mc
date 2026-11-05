@@ -256,6 +256,8 @@ async def ejecutar_menu_ayuda(message):
 # 6. RADAR
 # ==========================================
 def generar_mapa_texto():
+    from utils.data import CACHE_CONFIG, CACHE_ZONAS, RADAR_DESPLIEGUE
+    
     config = cargar_config_general()
     estado = config.get('MENSAJE_ABIERTO', '🟢 ACTIVO') if radar_abierto_al_publico else config.get('MENSAJE_CERRADO', '🔴 EN ESPERA')
     lineas_zonas = []
@@ -264,7 +266,7 @@ def generar_mapa_texto():
         lineas_zonas.append(f"  • {emoji} {zona.ljust(15)} {usuario if usuario else '[ VACÍO ] ️'}")
     return (
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f" {config.get('TITULO_RADAR', '🏍️ JINETES MC • RADAR DE ZONAS')}\n"
+        f" {config.get('TITULO_RADAR', '️ JINETES MC • RADAR DE ZONAS')}\n"
         "     Control de Despliegue en Tiempo Real\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🗺️  DESPLIEGUE EN VIVO (ZONAS ASIGNADAS)\n"
