@@ -1,12 +1,11 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+import discord
 
 class DataManager:
     def __init__(self):
-        # Conexión a Google Sheets
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        # NOTA: Te recomiendo poner la ruta en el .env, pero dejo la tuya por compatibilidad
         creds_path = os.getenv("CREDS_PATH", "/etc/secrets/creds.json")
         creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
         self.client = gspread.authorize(creds)
@@ -14,7 +13,7 @@ class DataManager:
         spreadsheet_name = os.getenv("SPREADSHEET_NAME", "jinetesmc")
         self.spreadsheet = self.client.open(spreadsheet_name)
 
-        # Referencias a las hojas
+        # Diccionario centralizado de hojas
         self.sheets = {
             "menu": self.spreadsheet.worksheet("Menu_Principal"),
             "sub": self.spreadsheet.worksheet("Subcategorias"),
@@ -36,7 +35,7 @@ class DataManager:
             "busq_vestimenta": self.spreadsheet.worksheet("Vestimenta_Buscable")
         }
 
-        # Caché (Ya no necesitas 'global', son atributos de esta clase)
+        # Cachés (Reemplazan a tus variables globales)
         self.cache_config = {}
         self.cache_zonas = []
         self.radar_despliegue = {}
@@ -50,23 +49,22 @@ class DataManager:
         self.cache_roles_auto = {}
         self.cache_mensajes = {}
 
-    # --- MÉTODOS DE CARGA (Ejemplo con algunos, aplica el mismo patrón al resto) ---
     def cargar_todo(self):
         self._cargar_config_general()
         self._cargar_zonas()
         self._cargar_comandos()
         self._cargar_reclutamiento()
         self._cargar_logs()
-        # ... llama al resto de tus funciones de carga aquí ...
+        self._cargar_categorias()
+        self._cargar_roles()
+        self._cargar_mensajes()
 
     def _cargar_config_general(self):
-        if not self.cache_config:
-            records = self.sheets["general"].get_all_records()
-            for row in records:
-                clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
-                valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
-                if clave and valor:
-                    self.cache_config[str(row[clave])] = str(row[valor])
+        records = self.sheets["general"].get_all_records()
+        for row in records:
+            clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
+            valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
+            if clave and valor: self.cache_config[str(row[clave])] = str(row[valor])
 
     def _cargar_zonas(self):
         self.cache_zonas = self.sheets["zonas"].get_all_records()
@@ -83,38 +81,45 @@ class DataManager:
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
-            if clave and valor:
-                self.cache_reclutamiento[str(row[clave])] = str(row[valor])
+            if clave and valor: self.cache_reclutamiento[str(row[clave])] = str(row[valor])
         
-        # Preguntas
-        records_preg = self.sheets["recluta_preguntas"].get_all_records()
-        self.preguntas_reclutamiento = sorted(
-            [r for r in records_preg if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0],
-            key=lambda x: int(x.get('Orden', 0))
-        )
+        preg = self.sheets["recluta_preguntas"].get_all_records()
+        self.preguntas_reclutamiento = sorted([r for r in preg if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0], key=lambda x: int(x.get('Orden', 0)))
         
-        records_desp = self.sheets["preguntas_desplegables"].get_all_records()
-        self.preguntas_desplegables = sorted(
-            [r for r in records_desp if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0],
-            key=lambda x: int(x.get('Orden', 0))
-        )
+        desp = self.sheets["preguntas_desplegables"].get_all_records()
+        self.preguntas_desplegables = sorted([r for r in desp if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0], key=lambda x: int(x.get('Orden', 0)))
 
     def _cargar_logs(self):
         records = self.sheets["logs"].get_all_records()
         for row in records:
-            tipo, canal_id = row.get('Tipo_Log', ''), row.get('Canal_ID', '')
-            if tipo and canal_id:
-                try: self.cache_logs[tipo] = int(canal_id)
+            if row.get('Tipo_Log') and row.get('Canal_ID'):
+                try: self.cache_logs[row.get('Tipo_Log')] = int(row.get('Canal_ID'))
                 except: pass
+
+    def _cargar_categorias(self):
+        records = self.sheets["categorias"].get_all_records()
+        for row in records:
+            if row.get('Tipo') and row.get('Categoria_ID'):
+                try: self.cache_categorias[row.get('Tipo')] = int(row.get('Categoria_ID'))
+                except: pass
+
+    def _cargar_roles(self):
+        records_staff = self.sheets["roles_staff"].get_all_records()
+        self.cache_roles_staff = [int(row.get('Rol_ID')) for row in records_staff if row.get('Rol_ID')]
+        
+        records_auto = self.sheets["roles_auto"].get_all_records()
+        self.cache_roles_auto = {row.get('Accion'): int(row.get('Rol_ID')) for row in records_auto if row.get('Accion') and row.get('Rol_ID')}
+
+    def _cargar_mensajes(self):
+        records = self.sheets["mensajes"].get_all_records()
+        self.cache_mensajes = {row.get('Clave'): row.get('Valor') for row in records if row.get('Clave')}
 
     async def enviar_log(self, bot, tipo_log, mensaje, color):
         if not self.cache_logs: self._cargar_logs()
         canal_id = self.cache_logs.get(tipo_log)
         if not canal_id: return
-        
         try:
             canal = bot.get_channel(canal_id) or await bot.fetch_channel(canal_id)
-            import discord
             embed = discord.Embed(description=mensaje, color=color, timestamp=discord.utils.utcnow())
             await canal.send(embed=embed)
         except Exception as e:
