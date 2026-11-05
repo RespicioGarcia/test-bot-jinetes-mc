@@ -1,9 +1,11 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import os
+import discord
+import datetime
 
 # ==========================================
-# 1. CONEXIÓN A GOOGLE SHEETS (Igual que antes)
+# 1. CONEXIÓN A GOOGLE SHEETS
 # ==========================================
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("/etc/secrets/creds.json", scope)
@@ -32,7 +34,7 @@ sheet_preguntas_desplegables = spreadsheet.worksheet("Config_Preguntas_Desplegab
 sheet_mensajes = spreadsheet.worksheet("Config_Mensajes")
 
 # ==========================================
-# 2. VARIABLES GLOBALES (Las movemos aquí)
+# 2. VARIABLES GLOBALES (Se modificarán en memoria, no se reasignarán)
 # ==========================================
 RADAR_DESPLIEGUE = {}
 ultimo_radar_message_id = None
@@ -56,26 +58,33 @@ CACHE_ROLES_AUTO = {}
 CACHE_MENSAJES = {}
 
 # ==========================================
-# 3. FUNCIONES DE CARGA (Copiadas de tu main.py)
+# 3. FUNCIONES DE CARGA (Corregidas para modificar en memoria)
 # ==========================================
 def cargar_config_general():
     global CACHE_CONFIG
     if not CACHE_CONFIG:
         records = sheet_general.get_all_records()
+        nuevo_cache = {}
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
             if clave and valor:
-                CACHE_CONFIG[str(row[clave])] = str(row[valor])
+                nuevo_cache[str(row[clave])] = str(row[valor])
+        CACHE_CONFIG.clear()
+        CACHE_CONFIG.update(nuevo_cache)
     return CACHE_CONFIG
 
 def cargar_zonas():
     global CACHE_ZONAS, RADAR_DESPLIEGUE
     if not CACHE_ZONAS:
-        CACHE_ZONAS = sheet_zonas.get_all_records()
+        CACHE_ZONAS.extend(sheet_zonas.get_all_records())
+    
     zonas_activas = [r for r in CACHE_ZONAS if str(r.get('Activo', '')).upper() == 'SI']
     zonas_activas.sort(key=lambda x: int(x.get('Orden', 0)))
-    RADAR_DESPLIEGUE = {z['Zona']: None for z in zonas_activas}
+    
+    nuevo_radar = {z['Zona']: None for z in zonas_activas}
+    RADAR_DESPLIEGUE.clear()
+    RADAR_DESPLIEGUE.update(nuevo_radar)
 
 def cargar_horarios():
     records = sheet_horarios.get_all_records()
@@ -87,144 +96,38 @@ def cargar_horarios():
     return list(set(dias)), list(set(horas))
 
 def cargar_comandos():
-    records = sheet_comandos.get_all_records()
     global COMANDOS_CONFIG
-    COMANDOS_CONFIG = {str(row.get('Comando', '')).lower(): row for row in records}
+    records = sheet_comandos.get_all_records()
+    nuevo_comandos = {str(row.get('Comando', '')).lower(): row for row in records}
+    COMANDOS_CONFIG.clear()
+    COMANDOS_CONFIG.update(nuevo_comandos)
 
 def cargar_config_reclutamiento():
     global CACHE_RECLUTAMIENTO
     if not CACHE_RECLUTAMIENTO:
         records = sheet_recluta_general.get_all_records()
+        nuevo_cache = {}
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
             if clave and valor:
-                CACHE_RECLUTAMIENTO[str(row[clave])] = str(row[valor])
+                nuevo_cache[str(row[clave])] = str(row[valor])
+        CACHE_RECLUTAMIENTO.clear()
+        CACHE_RECLUTAMIENTO.update(nuevo_cache)
     return CACHE_RECLUTAMIENTO
 
 def cargar_preguntas_reclutamiento():
     global PREGUNTAS_RECLUTAMIENTO
-    
-    print("🔍 DEBUG: Leyendo hoja Config_Recluta_Preguntas...")
     records = sheet_recluta_preguntas.get_all_records()
-    print(f"🔍 DEBUG: Total de filas leídas: {len(records)}")
-    
-    # Mostrar las primeras 3 filas para ver qué llega
-    for i, r in enumerate(records[:3]):
-        print(f"🔍 DEBUG Fila {i}: {r}")
-    
-    # Filtrar preguntas válidas (con Orden numérico mayor que 0)
-    preguntas = []
-    for r in records:
-        orden_str = str(r.get('Orden', '')).strip()
-        print(f"🔍 DEBUG: Orden='{orden_str}', es_digito={orden_str.isdigit()}")
-        
-        if orden_str.isdigit() and int(orden_str) > 0:
-            preguntas.append(r)
-    
+    preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
     preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
-    PREGUNTAS_RECLUTAMIENTO = preguntas
     
-    print(f"✅ DEBUG: Preguntas válidas encontradas: {len(PREGUNTAS_RECLUTAMIENTO)}")
+    # MODIFICAMOS LA LISTA ORIGINAL EN MEMORIA
+    PREGUNTAS_RECLUTAMIENTO.clear()
+    PREGUNTAS_RECLUTAMIENTO.extend(preguntas)
     return PREGUNTAS_RECLUTAMIENTO
-    
+
 def cargar_preguntas_desplegables():
     global PREGUNTAS_DESPLEGABLES
     records = sheet_preguntas_desplegables.get_all_records()
-    preguntas = [r for r in records if str(r.get('Orden', '')).isdigit() and int(r.get('Orden', 0)) > 0]
-    preguntas.sort(key=lambda x: int(x.get('Orden', 0)))
-    PREGUNTAS_DESPLEGABLES = preguntas
-    return PREGUNTAS_DESPLEGABLES
-
-def cargar_logs_config():
-    global CACHE_LOGS
-    CACHE_LOGS = {}
-    records = sheet_logs.get_all_records()
-    for row in records:
-        tipo = row.get('Tipo_Log', '')
-        canal_id = row.get('Canal_ID', '')
-        if tipo and canal_id:
-            try:
-                CACHE_LOGS[tipo] = int(canal_id)
-            except:
-                pass
-    return CACHE_LOGS
-
-def cargar_categorias_config():
-    global CACHE_CATEGORIAS
-    CACHE_CATEGORIAS = {}
-    records = sheet_categorias.get_all_records()
-    for row in records:
-        tipo = row.get('Tipo', '')
-        cat_id = row.get('Categoria_ID', '')
-        if tipo and cat_id:
-            try:
-                CACHE_CATEGORIAS[tipo] = int(cat_id)
-            except:
-                pass
-    return CACHE_CATEGORIAS
-
-def cargar_roles_staff():
-    global CACHE_ROLES_STAFF
-    CACHE_ROLES_STAFF = []
-    records = sheet_roles_staff.get_all_records()
-    for row in records:
-        rol_id = row.get('Rol_ID', '')
-        if rol_id:
-            try:
-                CACHE_ROLES_STAFF.append(int(rol_id))
-            except:
-                pass
-    return CACHE_ROLES_STAFF
-
-def cargar_roles_auto():
-    global CACHE_ROLES_AUTO
-    CACHE_ROLES_AUTO = {}
-    records = sheet_roles_auto.get_all_records()
-    for row in records:
-        accion = row.get('Accion', '')
-        rol_id = row.get('Rol_ID', '')
-        if accion and rol_id:
-            try:
-                CACHE_ROLES_AUTO[accion] = int(rol_id)
-            except:
-                pass
-    return CACHE_ROLES_AUTO
-
-def cargar_mensajes_config():
-    global CACHE_MENSAJES
-    CACHE_MENSAJES = {}
-    records = sheet_mensajes.get_all_records()
-    for row in records:
-        clave = row.get('Clave', '')
-        valor = row.get('Valor', '')
-        if clave:
-            CACHE_MENSAJES[clave] = valor
-    return CACHE_MENSAJES
-
-# Función helper para que los cogs y el main puedan enviar logs fácilmente
-async def enviar_log(tipo_log, mensaje, color):
-    import discord
-    import datetime
-    import sys
-    
-    # Obtenemos la instancia del bot desde el archivo principal (main.py)
-    bot = sys.modules['__main__'].bot
-    
-    if not CACHE_LOGS:
-        cargar_logs_config()
-    
-    canal_id = CACHE_LOGS.get(tipo_log)
-    if not canal_id:
-        print(f"⚠️ No hay canal configurado para log: {tipo_log}")
-        return
-    
-    try:
-        canal = bot.get_channel(canal_id)
-        if not canal:
-            canal = await bot.fetch_channel(canal_id)
-        
-        embed = discord.Embed(description=mensaje, color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
-        await canal.send(embed=embed)
-    except Exception as e:
-        print(f"🚨 Error enviando log {tipo_log}: {e}")
+    preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit
