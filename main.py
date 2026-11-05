@@ -277,18 +277,16 @@ class RadarControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-       @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
+    @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
     async def asignar_posicion(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # AÑADIR ESTAS LÍNEAS AL PRINCIPIO
         from utils.data import RADAR_DESPLIEGUE
         
         if not radar_abierto_al_publico:
-            return await interaction.response.send_message("❌ El radar está cerrado.", ephemeral=True)
+            return await interaction.response.send_message(" El radar está cerrado.", ephemeral=True)
             
         opciones = [discord.SelectOption(label=zona, value=zona) for zona in RADAR_DESPLIEGUE.keys()]
         opciones.append(discord.SelectOption(label="🚪 Salir de Servicio", value="Retirarse"))
         
-        # ... el resto del código sigue igual ...
         view = discord.ui.View(timeout=60)
         select = discord.ui.Select(placeholder="📍 Elige tu punto de despliegue...", options=opciones)
         
@@ -318,7 +316,7 @@ class RadarControlView(discord.ui.View):
     @discord.ui.button(label=" Resetear Radar", style=discord.ButtonStyle.danger, custom_id="radar:reset")
     async def resetear_radar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ResetPasswordModal())
-
+        
 class ResetPasswordModal(discord.ui.Modal, title=" Autorización de Reset"):
     password_input = discord.ui.TextInput(label="Clave de Reset", style=discord.TextStyle.short, placeholder="Clave de administrador...", required=True)
 
