@@ -280,12 +280,19 @@ class RadarControlView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
+       @discord.ui.button(label=" Asignar Posición", style=discord.ButtonStyle.blurple, custom_id="radar:posicion")
     async def asignar_posicion(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # AÑADE ESTA LÍNEA AL PRINCIPIO
+        from utils.data import RADAR_DESPLIEGUE, radar_abierto_al_publico
+        
+        # A PARTIR DE AQUÍ, DEJA TU CÓDIGO ORIGINAL EXACTAMENTE IGUAL
         if not radar_abierto_al_publico:
             return await interaction.response.send_message("❌ El radar está cerrado.", ephemeral=True)
+            
         opciones = [discord.SelectOption(label=zona, value=zona) for zona in RADAR_DESPLIEGUE.keys()]
         opciones.append(discord.SelectOption(label="🚪 Salir de Servicio", value="Retirarse"))
+        
+        # ... y el resto de tu código original del select ...
         view = discord.ui.View(timeout=60)
         select = discord.ui.Select(placeholder="📍 Elige tu punto de despliegue...", options=opciones)
         
