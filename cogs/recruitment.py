@@ -2,9 +2,8 @@ import discord
 from discord.ext import commands
 import datetime
 from utils.data import (
-    PREGUNTAS_RECLUTAMIENTO, PREGUNTAS_DESPLEGABLES,
-    CACHE_ROLES_STAFF, CACHE_CATEGORIAS, CACHE_ROLES_AUTO, CACHE_MENSAJES,
-    sheet_registro_reclutas,
+    PREGUNTAS_RECLUTAMIENTO, PREGUNTAS_DESPLEGABLES, CACHE_ROLES_STAFF, CACHE_CATEGORIAS,
+    CACHE_ROLES_AUTO, CACHE_MENSAJES, sheet_registro_reclutas,
     cargar_config_reclutamiento, cargar_preguntas_reclutamiento, cargar_config_embed,
     aplicar_formato_texto, enviar_log
 )
@@ -26,7 +25,6 @@ class FormularioReclutaModal(discord.ui.Modal):
         if not preguntas_pagina:
             self.add_item(discord.ui.TextInput(label="Sin preguntas", placeholder="Contacta admin", required=False, max_length=100))
             return
-        
         for i, p in enumerate(preguntas_pagina):
             try:
                 pregunta = str(p.get('Pregunta', f'Pregunta {i+1}'))
@@ -54,7 +52,6 @@ class FormularioReclutaModal(discord.ui.Modal):
             await interaction.response.defer(ephemeral=True)
             await construir_y_enviar_embed(interaction, todas, self.respuestas_desplegables)
 
-
 class FormularioReclutaModalPaginado(discord.ui.Modal):
     def __init__(self, usuario, canal_ticket, respuestas_desplegables, preguntas, pagina_actual, total_paginas, respuestas_previas):
         self.usuario = usuario
@@ -64,11 +61,9 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
         self.total_paginas = total_paginas
         self.respuestas_previas = respuestas_previas
         super().__init__(title=f"Solicitud ({pagina_actual}/{total_paginas})", custom_id=f"recluta_modal_p{pagina_actual}")
-        
         if not preguntas:
             self.add_item(discord.ui.TextInput(label="Fin", placeholder="...", required=False, max_length=100))
             return
-        
         for i, p in enumerate(preguntas):
             try:
                 pregunta = str(p.get('Pregunta', f'Pregunta {i+1}'))
@@ -96,7 +91,6 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
             await interaction.response.defer(ephemeral=True)
             await construir_y_enviar_embed(interaction, todas, self.respuestas_desplegables)
 
-
 # ==========================================
 # VIEWS
 # ==========================================
@@ -112,30 +106,22 @@ class MenuDesplegableView(discord.ui.View):
         for pregunta in PREGUNTAS_DESPLEGABLES:
             opciones = [opt.strip() for opt in str(pregunta.get('Opciones', '')).split(',') if opt.strip()]
             if opciones:
-                select = discord.ui.Select(
-                    placeholder=pregunta.get('Pregunta', 'Selecciona...')[:100],
-                    options=[discord.SelectOption(label=opt[:100], value=opt[:100]) for opt in opciones[:25]],
-                    min_values=1, max_values=1
-                )
+                select = discord.ui.Select(placeholder=pregunta.get('Pregunta', 'Selecciona...')[:100], options=[discord.SelectOption(label=opt[:100], value=opt[:100]) for opt in opciones[:25]], min_values=1, max_values=1)
                 async def select_callback(interaction: discord.Interaction, select=select, pregunta=pregunta):
                     await interaction.response.defer(ephemeral=True)
                     self.respuestas_desplegables[pregunta.get('Pregunta')] = select.values[0]
                     await interaction.followup.send(f"✅ Seleccionado: {select.values[0]}", ephemeral=True)
                 select.callback = select_callback
                 self.add_item(select)
-        
         btn = discord.ui.Button(label="📝 Continuar con formulario", style=discord.ButtonStyle.primary, custom_id="recluta:continuar")
         async def continuar(interaction: discord.Interaction):
-            if interaction.user != self.usuario:
-                return await interaction.response.send_message("❌ Este formulario es solo para ti.", ephemeral=True)
+            if interaction.user != self.usuario: return await interaction.response.send_message("❌ Este formulario es solo para ti.", ephemeral=True)
             oblig = [p for p in PREGUNTAS_DESPLEGABLES if str(p.get('Obligatorio', 'NO')).upper() == 'SI']
             faltan = [p.get('Pregunta') for p in oblig if p.get('Pregunta') not in self.respuestas_desplegables]
-            if faltan:
-                return await interaction.response.send_message(f"⚠️ Debes responder: {', '.join(faltan[:3])}", ephemeral=True)
+            if faltan: return await interaction.response.send_message(f"⚠️ Debes responder: {', '.join(faltan[:3])}", ephemeral=True)
             await interaction.response.send_modal(FormularioReclutaModal(self.usuario, self.canal_ticket, self.respuestas_desplegables))
         btn.callback = continuar
         self.add_item(btn)
-
 
 class BienvenidaReclutaView(discord.ui.View):
     def __init__(self, usuario):
@@ -143,12 +129,9 @@ class BienvenidaReclutaView(discord.ui.View):
         self.usuario = usuario
     @discord.ui.button(label="📝 Rellenar solicitud de ingreso", style=discord.ButtonStyle.primary, custom_id="recluta:formulario")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.usuario:
-            return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
-        if not PREGUNTAS_RECLUTAMIENTO:
-            return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
+        if interaction.user != self.usuario: return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
+        if not PREGUNTAS_RECLUTAMIENTO: return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
         await interaction.response.send_modal(FormularioReclutaModal(self.usuario, interaction.channel, {}))
-
 
 class BotonesGestionView(discord.ui.View):
     def __init__(self, usuario_id, canal_ticket):
@@ -180,7 +163,6 @@ class BotonesGestionView(discord.ui.View):
         usuario = interaction.guild.get_member(self.usuario_id)
         if not usuario: return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
         await interaction.response.send_message(f"¿Confirmas **RECHAZAR** a {usuario.mention}?", view=ConfirmarAccionView("rechazar", usuario, self.canal_ticket), ephemeral=True)
-
 
 class ConfirmarAccionView(discord.ui.View):
     def __init__(self, accion, usuario, canal_ticket):
@@ -230,7 +212,6 @@ class ConfirmarAccionView(discord.ui.View):
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("❌ Acción cancelada.", ephemeral=True)
 
-
 # ==========================================
 # FUNCIONES AUXILIARES
 # ==========================================
@@ -250,30 +231,22 @@ def guardar_recluta_en_excel(usuario, canal, respuestas_formulario, respuestas_d
     try:
         ahora = datetime.datetime.now(datetime.timezone.utc)
         fila = [ahora.strftime('%d/%m/%Y %H:%M'), usuario.display_name, str(usuario.id), canal.name if canal else 'Desconocido', 'Pendiente']
-        for p in PREGUNTAS_DESPLEGABLES:
-            fila.append(respuestas_desplegables.get(p.get('Pregunta', ''), ''))
-        for _, respuesta_texto in respuestas_formulario:
-            fila.append(respuesta_texto)
+        for p in PREGUNTAS_DESPLEGABLES: fila.append(respuestas_desplegables.get(p.get('Pregunta', ''), ''))
+        for _, respuesta_texto in respuestas_formulario: fila.append(respuesta_texto)
         sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         print(f"🚨 Error al guardar en Excel: {e}")
         return False
 
-
 async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas_desplegables):
-    """Construye el embed usando Config_Embed"""
     preguntas = cargar_preguntas_reclutamiento()
     config_embed = cargar_config_embed()
-    
-    # Diccionario con todos los datos
     datos = {}
-    for i, (pregunta_texto, respuesta_texto) in enumerate(todas_las_respuestas, start=1):
-        datos[f'Pregunta_{i}'] = respuesta_texto
+    for i, (pregunta_texto, respuesta_texto) in enumerate(todas_las_respuestas, start=1): datos[f'Pregunta_{i}'] = respuesta_texto
     for pregunta, respuesta in respuestas_desplegables.items():
         idx = next((i for i, p in enumerate(PREGUNTAS_DESPLEGABLES) if p.get('Pregunta') == pregunta), -1)
         if idx >= 0: datos[f'Pregunta_Desplegable_{idx+1}'] = respuesta
-    
     datos['Fecha'] = datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y %H:%M')
     datos['Usuario_Discord'] = interaction.user.display_name
     datos['ID_Usuario'] = str(interaction.user.id)
@@ -293,9 +266,7 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
             titulo = f"{campo['icono']} {campo['titulo']}".strip()
             embed.add_field(name=titulo, value=valor_fmt, inline=False)
     else:
-        # Fallback antiguo
-        for pregunta, respuesta in respuestas_desplegables.items():
-            embed.add_field(name=f"📌 {pregunta}", value=f"**{respuesta}**", inline=False)
+        for pregunta, respuesta in respuestas_desplegables.items(): embed.add_field(name=f"📌 {pregunta}", value=f"**{respuesta}**", inline=False)
         for (pt, rt), pc in zip(todas_las_respuestas, preguntas):
             ub = str(pc.get('Ubicacion', 'CAMPO')).upper()
             es = str(pc.get('Estilo', 'Normal')).lower()
@@ -313,7 +284,6 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
     guardar_recluta_en_excel(interaction.user, interaction.channel, todas_las_respuestas, respuestas_desplegables)
     await interaction.followup.send("✅ **Solicitud enviada correctamente.**", ephemeral=True)
 
-
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
     if PREGUNTAS_DESPLEGABLES:
@@ -324,13 +294,52 @@ async def enviar_bienvenida_recluta(canal, usuario):
         msg = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!').replace('{user}', usuario.mention)
         await canal.send(content=msg, view=BienvenidaReclutaView(usuario))
 
-
 # ==========================================
 # COG
 # ==========================================
 class RecruitmentCog(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot): self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel):
+        if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
+            await enviar_log("reclutamiento_ticket", f"🎫 **Nuevo ticket creado**: {channel.mention}", discord.Color.green())
+            await channel.typing()
+            import asyncio
+            await asyncio.sleep(4)
+            usuario_creador = None
+            try:
+                async for message in channel.history(limit=5):
+                    if message.mentions:
+                        for user in message.mentions:
+                            if not user.bot:
+                                usuario_creador = user
+                                break
+                    if usuario_creador: break
+            except: pass
+            if not usuario_creador:
+                try:
+                    async for message in channel.history(limit=10):
+                        if not message.author.bot:
+                            usuario_creador = message.author
+                            break
+                except: pass
+            if usuario_creador:
+                await enviar_bienvenida_recluta(channel, usuario_creador)
+            else:
+                await channel.send("❌ No se pudo identificar al usuario real. Usa `/recluta @usuario` manualmente.")
+
+    @commands.Cog.listener()
+    async def on_thread_create(self, thread):
+        if "ticket" in thread.name.lower():
+            import asyncio
+            await asyncio.sleep(3)
+            try:
+                async for message in thread.history(limit=10):
+                    if not message.author.bot:
+                        await enviar_bienvenida_recluta(thread, message.author)
+                        break
+            except: pass
 
     @commands.hybrid_command(name="recluta", description="Enviar formulario de ingreso manualmente en un ticket")
     async def recluta_manual(self, ctx, usuario: discord.Member):
@@ -349,8 +358,7 @@ class RecruitmentCog(commands.Cog):
         await ctx.defer(ephemeral=True)
         records = sheet_registro_reclutas.get_all_records()
         ficha = next((row for row in records if str(row.get('ID_Usuario', '')) == str(usuario.id)), None)
-        if not ficha:
-            return await ctx.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
+        if not ficha: return await ctx.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
         
         config_embed = cargar_config_embed()
         embed = discord.Embed(title="📋 FICHA OFICIAL - JINETES MC", color=discord.Color.gold(), timestamp=datetime.datetime.now(datetime.timezone.utc))
@@ -366,17 +374,13 @@ class RecruitmentCog(commands.Cog):
                 titulo = f"{campo['icono']} {campo['titulo']}".strip()
                 embed.add_field(name=titulo, value=valor_fmt, inline=False)
         else:
-            # Fallback
             if ficha.get('Fecha'): embed.add_field(name="📅 Fecha", value=f"**{ficha['Fecha']}**", inline=False)
             if ficha.get('Usuario_Discord'): embed.add_field(name="👤 Usuario", value=f"**{ficha['Usuario_Discord']}**", inline=False)
             if ficha.get('Estado'): embed.add_field(name="📊 Estado", value=f"**{ficha['Estado']}**", inline=False)
             for key, value in ficha.items():
-                if key.startswith('Pregunta_') and value:
-                    embed.add_field(name=f" {key}", value=f"**{value}**", inline=False)
+                if key.startswith('Pregunta_') and value: embed.add_field(name=f" {key}", value=f"**{value}**", inline=False)
         
         embed.set_footer(text=f"ID: {usuario.id}")
         await ctx.send(f" Ficha de {usuario.mention}", embed=embed, ephemeral=True)
 
-
-async def setup(bot):
-    await bot.add_cog(RecruitmentCog(bot))
+async def setup(bot): await bot.add_cog(RecruitmentCog(bot))
