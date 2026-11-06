@@ -32,6 +32,7 @@ sheet_roles_staff = spreadsheet.worksheet("Config_Roles_Staff")
 sheet_roles_auto = spreadsheet.worksheet("Config_Roles_Automatizacion")
 sheet_preguntas_desplegables = spreadsheet.worksheet("Config_Preguntas_Desplegables")
 sheet_mensajes = spreadsheet.worksheet("Config_Mensajes")
+sheet_config_embed = spreadsheet.worksheet("Config_Embed")
 
 # ==========================================
 # 2. VARIABLES GLOBALES (Se modificarán en memoria, no se reasignarán)
@@ -56,6 +57,7 @@ CACHE_CATEGORIAS = {}
 CACHE_ROLES_STAFF = []
 CACHE_ROLES_AUTO = {}
 CACHE_MENSAJES = {}
+CACHE_CONFIG_EMBED = {'ficha': [], 'solicitud': []}
 
 # ==========================================
 # 3. FUNCIONES DE CARGA (Corregidas para modificar en memoria)
@@ -240,3 +242,46 @@ async def enviar_log(tipo_log, mensaje, color):
         await canal.send(embed=embed)
     except Exception as e:
         print(f"🚨 Error enviando log {tipo_log}: {e}")
+
+# ==========================================
+# NUEVO: Hoja de configuración de embeds
+# ==========================================
+
+
+def cargar_config_embed():
+    global CACHE_CONFIG_EMBED
+    records = sheet_config_embed.get_all_records()
+    
+    CACHE_CONFIG_EMBED = {'ficha': [], 'solicitud': []}
+    
+    for row in records:
+        tipo = str(row.get('Tipo_Embed', '')).lower()
+        if tipo in ['ficha', 'solicitud']:
+            try:
+                CACHE_CONFIG_EMBED[tipo].append({
+                    'orden': int(row.get('Orden', 0)),
+                    'campo': str(row.get('Campo_Origen', '')).strip(),
+                    'titulo': str(row.get('Titulo_Campo', '')),
+                    'icono': str(row.get('Icono', '')),
+                    'formato': str(row.get('Formato', 'normal')).lower(),
+                    'mostrar': str(row.get('Mostrar', 'SI')).upper() == 'SI'
+                })
+            except:
+                pass
+    
+    for tipo in CACHE_CONFIG_EMBED:
+        CACHE_CONFIG_EMBED[tipo].sort(key=lambda x: x['orden'])
+    
+    return CACHE_CONFIG_EMBED
+
+def aplicar_formato_texto(texto, formato):
+    """Aplica formato de Discord al texto"""
+    if formato == 'negrita':
+        return f"**{texto}**"
+    elif formato == 'cursiva':
+        return f"*{texto}*"
+    elif formato == 'negrita_cursiva':
+        return f"***{texto}***"
+    elif formato == 'codigo':
+        return f"`{texto}`"
+    return str(texto)
