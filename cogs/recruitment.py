@@ -242,20 +242,28 @@ def guardar_recluta_en_excel(usuario, canal, respuestas_formulario, respuestas_d
 async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas_desplegables):
     preguntas = cargar_preguntas_reclutamiento()
     config_embed = cargar_config_embed()
+    
+    # 1. Recopilar todos los datos disponibles
     datos = {}
-    for i, (pregunta_texto, respuesta_texto) in enumerate(todas_las_respuestas, start=1): datos[f'Pregunta_{i}'] = respuesta_texto
+    for i, (pregunta_texto, respuesta_texto) in enumerate(todas_las_respuestas, start=1): 
+        datos[f'Pregunta_{i}'] = respuesta_texto
+    
     for pregunta, respuesta in respuestas_desplegables.items():
         idx = next((i for i, p in enumerate(PREGUNTAS_DESPLEGABLES) if p.get('Pregunta') == pregunta), -1)
-        if idx >= 0: datos[f'Pregunta_Desplegable_{idx+1}'] = respuesta
+        if idx >= 0: 
+            datos[f'Pregunta_Desplegable_{idx+1}'] = respuesta
+            
     datos['Fecha'] = datetime.datetime.now(datetime.timezone.utc).strftime('%d/%m/%Y %H:%M')
     datos['Usuario_Discord'] = interaction.user.display_name
     datos['ID_Usuario'] = str(interaction.user.id)
     datos['Canal_Ticket'] = interaction.channel.name
     datos['Estado'] = '⏳ Pendiente de revisión'
     
+    # 2. Crear el embed base
     embed = discord.Embed(title="📋 SOLICITUD DE INGRESO - JINETES MC", color=discord.Color.gold(), timestamp=datetime.datetime.now(datetime.timezone.utc))
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
     
+    # 3. Aplicar configuración de Config_Embed (o fallback al sistema antiguo)
     config_solicitud = config_embed.get('solicitud', [])
     if config_solicitud:
         for campo in config_solicitud:
@@ -266,23 +274,59 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
             titulo = f"{campo['icono']} {campo['titulo']}".strip()
             embed.add_field(name=titulo, value=valor_fmt, inline=False)
     else:
-        for pregunta, respuesta in respuestas_desplegables.items(): embed.add_field(name=f"📌 {pregunta}", value=f"**{respuesta}**", inline=False)
+        # Fallback: comportamiento antiguo
+        for pregunta, respuesta in respuestas_desplegables.items(): 
+            embed.add_field(name=f"📌 {pregunta}", value=f"**{respuesta}**", inline=False)
+        
         for (pt, rt), pc in zip(todas_las_respuestas, preguntas):
             ub = str(pc.get('Ubicacion', 'CAMPO')).upper()
             es = str(pc.get('Estilo', 'Normal')).lower()
             if es == 'negrita': rt = f"**{rt}**"
             elif es == 'cursiva': rt = f"*{rt}*"
-            if ub == 'TITULO': embed.title = f"📋 SOLICITUD: {rt}"
-            elif ub == 'DESCRIPCION': embed.description = rt
-            else: embed.add_field(name=pt, value=rt, inline=False)
+            
+            if ub == 'TITULO': 
+                embed.title = f"📋 SOLICITUD: {rt}"
+            elif ub == 'DESCRIPCION': 
+                embed.description = rt
+            else: 
+                embed.add_field(name=pt, value=rt, inline=False)
+                
         embed.add_field(name=" Estado", value="⏳ **Pendiente de revisión**", inline=False)
     
     embed.set_footer(text=f"ID: {interaction.user.id} | Ticket: {interaction.channel.name}")
+    
+    # 4. Enviar el embed y los logs
     view = BotonesGestionView(interaction.user.id, interaction.channel)
     await interaction.channel.send(embed=embed, view=view)
     await enviar_log("reclutamiento_formulario", f"📝 **{interaction.user.mention}** envió ficha en {interaction.channel.mention}", discord.Color.yellow())
     guardar_recluta_en_excel(interaction.user, interaction.channel, todas_las_respuestas, respuestas_desplegables)
-    await interaction.followup.send("✅ **Solicitud enviada correctamente.**", ephemeral=True)
+    
+    # 5. 🔄 RENOMBRAR EL CANAL DEL TICKET (Lógica restaurada y mejorada)
+    titulo_personalizado = None
+    for (pregunta_texto, respuesta_texto), pregunta_config in zip(todas_las_respuestas, preguntas):
+        ubicacion = str(pregunta_config.get('Ubicacion', 'CAMPO')).upper()
+        if ubicacion == 'TITULO':
+            titulo_personalizado = respuesta_texto
+            break
+            
+    if titulo_personalizado and interaction.channel:
+        try:
+            # Limpiamos el texto: minúsculas, sin espacios (usamos guiones), y solo caracteres alfanuméricos
+            nombre_limpio = str(titulo_personalizado).lower().replace(' ', '-')
+            nombre_limpio = ''.join(e for e in nombre_limpio if e.isalnum() or e == '-')
+            nombre_limpio = nombre_limpio[:20] # Límite de seguridad
+            
+            await interaction.channel.edit(name=f"ficha-{nombre_limpio}")
+            print(f"✅ Canal renombrado a: ficha-{nombre_limpio}")
+        except Exception as e:
+            print(f"⚠️ Error al renombrar canal: {e}")
+    
+    # 6. Mensaje final al usuario
+    msg_info_extra = CACHE_MENSAJES.get('MSG_INFO_EXTRA', '')
+    if msg_info_extra:
+        await interaction.channel.send(content=f"**{interaction.user.mention}**,\n\n{msg_info_extra}")
+    
+    await interaction.followup.send("✅ **Solicitud enviada correctamente.** Un administrador la revisará pronto.", ephemeral=True)
 
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
