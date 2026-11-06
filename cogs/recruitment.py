@@ -7,6 +7,7 @@ from utils.data import (
     cargar_config_reclutamiento, cargar_preguntas_reclutamiento, cargar_config_embed,
     aplicar_formato_texto, enviar_log
 )
+
 # ==========================================
 # CONFIGURACIÓN DE FUNCIONALIDADES
 # ==========================================
@@ -56,6 +57,7 @@ class FormularioReclutaModal(discord.ui.Modal):
             await interaction.response.defer(ephemeral=True)
             await construir_y_enviar_embed(interaction, todas, self.respuestas_desplegables)
 
+
 class FormularioReclutaModalPaginado(discord.ui.Modal):
     def __init__(self, usuario, canal_ticket, respuestas_desplegables, preguntas, pagina_actual, total_paginas, respuestas_previas):
         self.usuario = usuario
@@ -95,6 +97,7 @@ class FormularioReclutaModalPaginado(discord.ui.Modal):
             await interaction.response.defer(ephemeral=True)
             await construir_y_enviar_embed(interaction, todas, self.respuestas_desplegables)
 
+
 # ==========================================
 # VIEWS
 # ==========================================
@@ -110,32 +113,48 @@ class MenuDesplegableView(discord.ui.View):
         for pregunta in PREGUNTAS_DESPLEGABLES:
             opciones = [opt.strip() for opt in str(pregunta.get('Opciones', '')).split(',') if opt.strip()]
             if opciones:
-                select = discord.ui.Select(placeholder=pregunta.get('Pregunta', 'Selecciona...')[:100], options=[discord.SelectOption(label=opt[:100], value=opt[:100]) for opt in opciones[:25]], min_values=1, max_values=1)
-        async def select_callback(interaction: discord.Interaction, select=select, pregunta=pregunta):
-            await interaction.response.defer(ephemeral=True)
-            self.respuestas_desplegables[pregunta.get('Pregunta')] = select.values[0]
-    # Mensaje de confirmación oculto por ahora. Para activarlo, descomenta la siguiente línea:
-    # await interaction.followup.send(f"✅ Seleccionado: {select.values[0]}", ephemeral=True)
+                select = discord.ui.Select(
+                    placeholder=pregunta.get('Pregunta', 'Selecciona...')[:100], 
+                    options=[discord.SelectOption(label=opt[:100], value=opt[:100]) for opt in opciones[:25]], 
+                    min_values=1, 
+                    max_values=1
+                )
+                
+                async def select_callback(interaction: discord.Interaction, select=select, pregunta=pregunta):
+                    await interaction.response.defer(ephemeral=True)
+                    self.respuestas_desplegables[pregunta.get('Pregunta')] = select.values[0]
+                    # Mensaje de confirmación oculto por ahora. Para activarlo, descomenta la siguiente línea:
+                    # await interaction.followup.send(f"✅ Seleccionado: {select.values[0]}", ephemeral=True)
+                
                 select.callback = select_callback
                 self.add_item(select)
+        
         btn = discord.ui.Button(label="📝 Continuar con formulario", style=discord.ButtonStyle.primary, custom_id="recluta:continuar")
+        
         async def continuar(interaction: discord.Interaction):
-            if interaction.user != self.usuario: return await interaction.response.send_message("❌ Este formulario es solo para ti.", ephemeral=True)
+            if interaction.user != self.usuario: 
+                return await interaction.response.send_message("❌ Este formulario es solo para ti.", ephemeral=True)
             oblig = [p for p in PREGUNTAS_DESPLEGABLES if str(p.get('Obligatorio', 'NO')).upper() == 'SI']
             faltan = [p.get('Pregunta') for p in oblig if p.get('Pregunta') not in self.respuestas_desplegables]
-            if faltan: return await interaction.response.send_message(f"⚠️ Debes responder: {', '.join(faltan[:3])}", ephemeral=True)
+            if faltan: 
+                return await interaction.response.send_message(f"⚠️ Debes responder: {', '.join(faltan[:3])}", ephemeral=True)
             await interaction.response.send_modal(FormularioReclutaModal(self.usuario, self.canal_ticket, self.respuestas_desplegables))
+        
         btn.callback = continuar
         self.add_item(btn)
+
 
 class BienvenidaReclutaView(discord.ui.View):
     def __init__(self, usuario):
         super().__init__(timeout=None)
         self.usuario = usuario
+    
     @discord.ui.button(label="📝 Rellenar solicitud de ingreso", style=discord.ButtonStyle.primary, custom_id="recluta:formulario")
     async def abrir_formulario(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.usuario: return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
-        if not PREGUNTAS_RECLUTAMIENTO: return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
+        if interaction.user != self.usuario: 
+            return await interaction.response.send_message("❌ Este formulario es solo para el usuario mencionado.", ephemeral=True)
+        if not PREGUNTAS_RECLUTAMIENTO: 
+            return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
         await interaction.response.send_modal(FormularioReclutaModal(self.usuario, interaction.channel, {}))
 
 
@@ -144,40 +163,57 @@ class BotonesGestionView(discord.ui.View):
         super().__init__(timeout=None)
         self.usuario_id = usuario_id
         self.canal_ticket = canal_ticket
-        
-        # Solo añadir los botones si la configuración está activada
-        if ACTIVAR_BOTONES_GESTION:
-            self.add_item(discord.ui.Button(label="✅ Aceptar", style=discord.ButtonStyle.success, custom_id="recluta:aceptar", row=0))
-            self.add_item(discord.ui.Button(label="⏳ En Revisión", style=discord.ButtonStyle.primary, custom_id="recluta:revision", row=0))
-            self.add_item(discord.ui.Button(label="❌ Rechazar", style=discord.ButtonStyle.danger, custom_id="recluta:rechazar", row=0))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Si los botones están desactivados, no permitir interacción
         if not ACTIVAR_BOTONES_GESTION:
+            await interaction.response.send_message("⚠️ Los botones de gestión están desactivados.", ephemeral=True)
             return False
+        
         es_staff = any(rol.id in CACHE_ROLES_STAFF for rol in interaction.user.roles)
         if not (es_staff or interaction.user.guild_permissions.administrator):
             await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
             return False
         return True
 
-    # Mantenemos los métodos por si los activas más tarde
+    # Los botones solo se muestran si ACTIVAR_BOTONES_GESTION es True
     @discord.ui.button(label="✅ Aceptar", style=discord.ButtonStyle.success, custom_id="recluta:aceptar")
     async def aceptar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not ACTIVAR_BOTONES_GESTION:
+            button.disabled = True
+            await interaction.response.edit_message(view=self)
+            return
         usuario = interaction.guild.get_member(self.usuario_id)
-        if not usuario: return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
+        if not usuario: 
+            return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
         await interaction.response.send_message(f"¿Confirmas **ACEPTAR** a {usuario.mention}?", view=ConfirmarAccionView("aceptar", usuario, self.canal_ticket), ephemeral=True)
 
     @discord.ui.button(label="⏳ En Revisión", style=discord.ButtonStyle.primary, custom_id="recluta:revision")
     async def revision(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not ACTIVAR_BOTONES_GESTION:
+            button.disabled = True
+            await interaction.response.edit_message(view=self)
+            return
         usuario = interaction.guild.get_member(self.usuario_id)
-        if not usuario: return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
+        if not usuario: 
+            return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
         await interaction.response.send_message(f"¿Confirmas poner a {usuario.mention} **EN REVISIÓN**?", view=ConfirmarAccionView("revision", usuario, self.canal_ticket), ephemeral=True)
 
     @discord.ui.button(label="❌ Rechazar", style=discord.ButtonStyle.danger, custom_id="recluta:rechazar")
     async def rechazar(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not ACTIVAR_BOTONES_GESTION:
+            button.disabled = True
+            await interaction.response.edit_message(view=self)
+            return
         usuario = interaction.guild.get_member(self.usuario_id)
-        if not usuario: return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
+        if not usuario: 
+            return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
         await interaction.response.send_message(f"¿Confirmas **RECHAZAR** a {usuario.mention}?", view=ConfirmarAccionView("rechazar", usuario, self.canal_ticket), ephemeral=True)
+
+    async def on_timeout(self):
+        # Deshabilitar todos los botones cuando expire el timeout
+        for item in self.children:
+            item.disabled = True
 
 
 class ConfirmarAccionView(discord.ui.View):
@@ -195,11 +231,13 @@ class ConfirmarAccionView(discord.ui.View):
                 rol_id = CACHE_ROLES_AUTO.get('aceptar')
                 if rol_id:
                     rol = interaction.guild.get_role(rol_id)
-                    if rol and rol not in self.usuario.roles: await self.usuario.add_roles(rol)
+                    if rol and rol not in self.usuario.roles: 
+                        await self.usuario.add_roles(rol)
                 cat_id = CACHE_CATEGORIAS.get('aprobados')
                 if cat_id:
                     cat = interaction.guild.get_channel(cat_id)
-                    if cat: await self.canal_ticket.edit(category=cat)
+                    if cat: 
+                        await self.canal_ticket.edit(category=cat)
                 await actualizar_estado_excel(self.usuario.id, "Aceptado")
                 await interaction.followup.send(f"✅ {self.usuario.mention} ha sido **ACEPTADO**", ephemeral=True)
                 await enviar_log("reclutamiento_aprobado", f"✅ {self.usuario.mention} aceptado por {interaction.user.mention}", discord.Color.green())
@@ -207,18 +245,21 @@ class ConfirmarAccionView(discord.ui.View):
                 cat_id = CACHE_CATEGORIAS.get('revision')
                 if cat_id:
                     cat = interaction.guild.get_channel(cat_id)
-                    if cat: await self.canal_ticket.edit(category=cat)
+                    if cat: 
+                        await self.canal_ticket.edit(category=cat)
                 await actualizar_estado_excel(self.usuario.id, "En Revisión")
                 await interaction.followup.send(f"⏳ {self.usuario.mention} está **EN REVISIÓN**", ephemeral=True)
             elif self.accion == "rechazar":
                 rol_id = CACHE_ROLES_AUTO.get('rechazar')
                 if rol_id:
                     rol = interaction.guild.get_role(rol_id)
-                    if rol and rol in self.usuario.roles: await self.usuario.remove_roles(rol)
+                    if rol and rol in self.usuario.roles: 
+                        await self.usuario.remove_roles(rol)
                 cat_id = CACHE_CATEGORIAS.get('rechazados')
                 if cat_id:
                     cat = interaction.guild.get_channel(cat_id)
-                    if cat: await self.canal_ticket.edit(category=cat)
+                    if cat: 
+                        await self.canal_ticket.edit(category=cat)
                 await actualizar_estado_excel(self.usuario.id, "Rechazado")
                 await interaction.followup.send(f"❌ {self.usuario.mention} ha sido **RECHAZADO**", ephemeral=True)
         except Exception as e:
@@ -227,6 +268,7 @@ class ConfirmarAccionView(discord.ui.View):
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("❌ Acción cancelada.", ephemeral=True)
+
 
 # ==========================================
 # FUNCIONES AUXILIARES
@@ -243,17 +285,21 @@ async def actualizar_estado_excel(user_id, nuevo_estado):
         print(f"🚨 Error actualizando Excel: {e}")
         return False
 
+
 def guardar_recluta_en_excel(usuario, canal, respuestas_formulario, respuestas_desplegables):
     try:
         ahora = datetime.datetime.now(datetime.timezone.utc)
         fila = [ahora.strftime('%d/%m/%Y %H:%M'), usuario.display_name, str(usuario.id), canal.name if canal else 'Desconocido', 'Pendiente']
-        for p in PREGUNTAS_DESPLEGABLES: fila.append(respuestas_desplegables.get(p.get('Pregunta', ''), ''))
-        for _, respuesta_texto in respuestas_formulario: fila.append(respuesta_texto)
+        for p in PREGUNTAS_DESPLEGABLES: 
+            fila.append(respuestas_desplegables.get(p.get('Pregunta', ''), ''))
+        for _, respuesta_texto in respuestas_formulario: 
+            fila.append(respuesta_texto)
         sheet_registro_reclutas.append_row(fila, value_input_option='USER_ENTERED')
         return True
     except Exception as e:
         print(f"🚨 Error al guardar en Excel: {e}")
         return False
+
 
 async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas_desplegables):
     preguntas = cargar_preguntas_reclutamiento()
@@ -276,16 +322,22 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
     datos['Estado'] = '⏳ Pendiente de revisión'
     
     # 2. Crear el embed base
-    embed = discord.Embed(title="📋 SOLICITUD DE INGRESO - JINETES MC", color=discord.Color.gold(), timestamp=datetime.datetime.now(datetime.timezone.utc))
+    embed = discord.Embed(
+        title="📋 SOLICITUD DE INGRESO - JINETES MC", 
+        color=discord.Color.gold(), 
+        timestamp=datetime.datetime.now(datetime.timezone.utc)
+    )
     embed.set_thumbnail(url=interaction.user.display_avatar.url)
     
     # 3. Aplicar configuración de Config_Embed (o fallback al sistema antiguo)
     config_solicitud = config_embed.get('solicitud', [])
     if config_solicitud:
         for campo in config_solicitud:
-            if not campo['mostrar']: continue
+            if not campo['mostrar']: 
+                continue
             valor = datos.get(campo['campo'], '')
-            if not valor: continue
+            if not valor: 
+                continue
             valor_fmt = aplicar_formato_texto(str(valor), campo['formato'])
             titulo = f"{campo['icono']} {campo['titulo']}".strip()
             embed.add_field(name=titulo, value=valor_fmt, inline=False)
@@ -297,8 +349,10 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
         for (pt, rt), pc in zip(todas_las_respuestas, preguntas):
             ub = str(pc.get('Ubicacion', 'CAMPO')).upper()
             es = str(pc.get('Estilo', 'Normal')).lower()
-            if es == 'negrita': rt = f"**{rt}**"
-            elif es == 'cursiva': rt = f"*{rt}*"
+            if es == 'negrita': 
+                rt = f"**{rt}**"
+            elif es == 'cursiva': 
+                rt = f"*{rt}*"
             
             if ub == 'TITULO': 
                 embed.title = f"📋 SOLICITUD: {rt}"
@@ -307,17 +361,24 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
             else: 
                 embed.add_field(name=pt, value=rt, inline=False)
                 
-        embed.add_field(name=" Estado", value="⏳ **Pendiente de revisión**", inline=False)
+        embed.add_field(name="📊 Estado", value="⏳ **Pendiente de revisión**", inline=False)
     
     embed.set_footer(text=f"ID: {interaction.user.id} | Ticket: {interaction.channel.name}")
     
-    # 4. Enviar el embed y los logs
+    # 4. Crear el View (los botones se mostrarán o no según ACTIVAR_BOTONES_GESTION)
     view = BotonesGestionView(interaction.user.id, interaction.channel)
+    
+    # Si los botones están desactivados, deshabilitarlos visualmente
+    if not ACTIVAR_BOTONES_GESTION:
+        for item in view.children:
+            item.disabled = True
+    
+    # 5. Enviar el embed y los logs
     await interaction.channel.send(embed=embed, view=view)
     await enviar_log("reclutamiento_formulario", f"📝 **{interaction.user.mention}** envió ficha en {interaction.channel.mention}", discord.Color.yellow())
     guardar_recluta_en_excel(interaction.user, interaction.channel, todas_las_respuestas, respuestas_desplegables)
     
-    # 5. 🔄 RENOMBRAR EL CANAL DEL TICKET (Lógica restaurada y mejorada)
+    # 6. 🔄 RENOMBRAR EL CANAL DEL TICKET (Lógica restaurada y mejorada)
     titulo_personalizado = None
     for (pregunta_texto, respuesta_texto), pregunta_config in zip(todas_las_respuestas, preguntas):
         ubicacion = str(pregunta_config.get('Ubicacion', 'CAMPO')).upper()
@@ -337,12 +398,13 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
         except Exception as e:
             print(f"⚠️ Error al renombrar canal: {e}")
     
-    # 6. Mensaje final al usuario
+    # 7. Mensaje final al usuario
     msg_info_extra = CACHE_MENSAJES.get('MSG_INFO_EXTRA', '')
     if msg_info_extra:
         await interaction.channel.send(content=f"**{interaction.user.mention}**,\n\n{msg_info_extra}")
     
     await interaction.followup.send("✅ **Solicitud enviada correctamente.** Un administrador la revisará pronto.", ephemeral=True)
+
 
 async def enviar_bienvenida_recluta(canal, usuario):
     config = cargar_config_reclutamiento()
@@ -354,11 +416,13 @@ async def enviar_bienvenida_recluta(canal, usuario):
         msg = config.get('MENSAJE_BIENVENIDA', '¡Bienvenido {user}!').replace('{user}', usuario.mention)
         await canal.send(content=msg, view=BienvenidaReclutaView(usuario))
 
+
 # ==========================================
 # COG
 # ==========================================
 class RecruitmentCog(commands.Cog):
-    def __init__(self, bot): self.bot = bot
+    def __init__(self, bot): 
+        self.bot = bot
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
@@ -375,15 +439,18 @@ class RecruitmentCog(commands.Cog):
                             if not user.bot:
                                 usuario_creador = user
                                 break
-                    if usuario_creador: break
-            except: pass
+                    if usuario_creador: 
+                        break
+            except: 
+                pass
             if not usuario_creador:
                 try:
                     async for message in channel.history(limit=10):
                         if not message.author.bot:
                             usuario_creador = message.author
                             break
-                except: pass
+                except: 
+                    pass
             if usuario_creador:
                 await enviar_bienvenida_recluta(channel, usuario_creador)
             else:
@@ -399,16 +466,20 @@ class RecruitmentCog(commands.Cog):
                     if not message.author.bot:
                         await enviar_bienvenida_recluta(thread, message.author)
                         break
-            except: pass
+            except: 
+                pass
 
     @commands.hybrid_command(name="recluta", description="Enviar formulario de ingreso manualmente en un ticket")
     async def recluta_manual(self, ctx, usuario: discord.Member):
         config = cargar_config_reclutamiento()
         es_ticket = False
         if config.get('CATEGORIA_TICKETS_ID', '') and ctx.channel.category_id:
-            if str(ctx.channel.category_id) == config.get('CATEGORIA_TICKETS_ID', ''): es_ticket = True
-        if not es_ticket and ctx.channel.name.lower().startswith('ticket-'): es_ticket = True
-        if not es_ticket: return await ctx.send(" Este comando solo funciona en canales de ticket.", ephemeral=True)
+            if str(ctx.channel.category_id) == config.get('CATEGORIA_TICKETS_ID', ''): 
+                es_ticket = True
+        if not es_ticket and ctx.channel.name.lower().startswith('ticket-'): 
+            es_ticket = True
+        if not es_ticket: 
+            return await ctx.send("⚠️ Este comando solo funciona en canales de ticket.", ephemeral=True)
         await ctx.send("🔄 Enviando bienvenida...", ephemeral=True)
         await enviar_bienvenida_recluta(ctx.channel, usuario)
         await ctx.send(f"✅ Bienvenida enviada a {usuario.mention}", ephemeral=True)
@@ -418,29 +489,42 @@ class RecruitmentCog(commands.Cog):
         await ctx.defer(ephemeral=True)
         records = sheet_registro_reclutas.get_all_records()
         ficha = next((row for row in records if str(row.get('ID_Usuario', '')) == str(usuario.id)), None)
-        if not ficha: return await ctx.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
+        if not ficha: 
+            return await ctx.send(f"❌ **{usuario.mention}** no tiene ficha registrada.", ephemeral=True)
         
         config_embed = cargar_config_embed()
-        embed = discord.Embed(title="📋 FICHA OFICIAL - JINETES MC", color=discord.Color.gold(), timestamp=datetime.datetime.now(datetime.timezone.utc))
+        embed = discord.Embed(
+            title="📋 FICHA OFICIAL - JINETES MC", 
+            color=discord.Color.gold(), 
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        )
         embed.set_thumbnail(url=usuario.display_avatar.url)
         
         config_ficha = config_embed.get('ficha', [])
         if config_ficha:
             for campo in config_ficha:
-                if not campo['mostrar']: continue
+                if not campo['mostrar']: 
+                    continue
                 valor = ficha.get(campo['campo'], '')
-                if not valor: continue
+                if not valor: 
+                    continue
                 valor_fmt = aplicar_formato_texto(str(valor), campo['formato'])
                 titulo = f"{campo['icono']} {campo['titulo']}".strip()
                 embed.add_field(name=titulo, value=valor_fmt, inline=False)
         else:
-            if ficha.get('Fecha'): embed.add_field(name="📅 Fecha", value=f"**{ficha['Fecha']}**", inline=False)
-            if ficha.get('Usuario_Discord'): embed.add_field(name="👤 Usuario", value=f"**{ficha['Usuario_Discord']}**", inline=False)
-            if ficha.get('Estado'): embed.add_field(name="📊 Estado", value=f"**{ficha['Estado']}**", inline=False)
+            if ficha.get('Fecha'): 
+                embed.add_field(name="📅 Fecha", value=f"**{ficha['Fecha']}**", inline=False)
+            if ficha.get('Usuario_Discord'): 
+                embed.add_field(name="👤 Usuario", value=f"**{ficha['Usuario_Discord']}**", inline=False)
+            if ficha.get('Estado'): 
+                embed.add_field(name="📊 Estado", value=f"**{ficha['Estado']}**", inline=False)
             for key, value in ficha.items():
-                if key.startswith('Pregunta_') and value: embed.add_field(name=f" {key}", value=f"**{value}**", inline=False)
+                if key.startswith('Pregunta_') and value: 
+                    embed.add_field(name=f"📌 {key}", value=f"**{value}**", inline=False)
         
         embed.set_footer(text=f"ID: {usuario.id}")
-        await ctx.send(f" Ficha de {usuario.mention}", embed=embed, ephemeral=True)
+        await ctx.send(f"📋 Ficha de {usuario.mention}", embed=embed, ephemeral=True)
 
-async def setup(bot): await bot.add_cog(RecruitmentCog(bot))
+
+async def setup(bot): 
+    await bot.add_cog(RecruitmentCog(bot))
