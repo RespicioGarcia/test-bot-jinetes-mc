@@ -3,6 +3,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import os
 import discord
 import datetime
+import sys
 
 # ==========================================
 # 1. CONEXIÓN A GOOGLE SHEETS
@@ -35,7 +36,7 @@ sheet_mensajes = spreadsheet.worksheet("Config_Mensajes")
 sheet_config_embed = spreadsheet.worksheet("Config_Embed")
 
 # ==========================================
-# 2. VARIABLES GLOBALES (Se modificarán en memoria, no se reasignarán)
+# 2. VARIABLES GLOBALES
 # ==========================================
 RADAR_DESPLIEGUE = {}
 ultimo_radar_message_id = None
@@ -60,33 +61,26 @@ CACHE_MENSAJES = {}
 CACHE_CONFIG_EMBED = {'ficha': [], 'solicitud': []}
 
 # ==========================================
-# 3. FUNCIONES DE CARGA (Corregidas para modificar en memoria)
+# 3. FUNCIONES DE CARGA
 # ==========================================
 def cargar_config_general():
     global CACHE_CONFIG
     if not CACHE_CONFIG:
         records = sheet_general.get_all_records()
-        nuevo_cache = {}
+        nuevo = {}
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
-            if clave and valor:
-                nuevo_cache[str(row[clave])] = str(row[valor])
-        CACHE_CONFIG.clear()
-        CACHE_CONFIG.update(nuevo_cache)
+            if clave and valor: nuevo[str(row[clave])] = str(row[valor])
+        CACHE_CONFIG.clear(); CACHE_CONFIG.update(nuevo)
     return CACHE_CONFIG
 
 def cargar_zonas():
     global CACHE_ZONAS, RADAR_DESPLIEGUE
-    if not CACHE_ZONAS:
-        CACHE_ZONAS.extend(sheet_zonas.get_all_records())
-    
-    zonas_activas = [r for r in CACHE_ZONAS if str(r.get('Activo', '')).upper() == 'SI']
-    zonas_activas.sort(key=lambda x: int(x.get('Orden', 0)))
-    
+    if not CACHE_ZONAS: CACHE_ZONAS.extend(sheet_zonas.get_all_records())
+    zonas_activas = sorted([r for r in CACHE_ZONAS if str(r.get('Activo', '')).upper() == 'SI'], key=lambda x: int(x.get('Orden', 0)))
     nuevo_radar = {z['Zona']: None for z in zonas_activas}
-    RADAR_DESPLIEGUE.clear()
-    RADAR_DESPLIEGUE.update(nuevo_radar)
+    RADAR_DESPLIEGUE.clear(); RADAR_DESPLIEGUE.update(nuevo_radar)
 
 def cargar_horarios():
     records = sheet_horarios.get_all_records()
@@ -100,160 +94,88 @@ def cargar_horarios():
 def cargar_comandos():
     global COMANDOS_CONFIG
     records = sheet_comandos.get_all_records()
-    nuevo_comandos = {str(row.get('Comando', '')).lower(): row for row in records}
-    COMANDOS_CONFIG.clear()
-    COMANDOS_CONFIG.update(nuevo_comandos)
+    nuevo = {str(row.get('Comando', '')).lower(): row for row in records}
+    COMANDOS_CONFIG.clear(); COMANDOS_CONFIG.update(nuevo)
 
 def cargar_config_reclutamiento():
     global CACHE_RECLUTAMIENTO
     if not CACHE_RECLUTAMIENTO:
         records = sheet_recluta_general.get_all_records()
-        nuevo_cache = {}
+        nuevo = {}
         for row in records:
             clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
             valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
-            if clave and valor:
-                nuevo_cache[str(row[clave])] = str(row[valor])
-        CACHE_RECLUTAMIENTO.clear()
-        CACHE_RECLUTAMIENTO.update(nuevo_cache)
+            if clave and valor: nuevo[str(row[clave])] = str(row[valor])
+        CACHE_RECLUTAMIENTO.clear(); CACHE_RECLUTAMIENTO.update(nuevo)
     return CACHE_RECLUTAMIENTO
 
 def cargar_preguntas_reclutamiento():
     global PREGUNTAS_RECLUTAMIENTO
     records = sheet_recluta_preguntas.get_all_records()
-    
-    # SINTAXIS CORREGIDA: Paréntesis y corchetes cerrados correctamente
     preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
     preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
-    
-    # MODIFICAMOS LA LISTA ORIGINAL EN MEMORIA
-    PREGUNTAS_RECLUTAMIENTO.clear()
-    PREGUNTAS_RECLUTAMIENTO.extend(preguntas)
+    PREGUNTAS_RECLUTAMIENTO.clear(); PREGUNTAS_RECLUTAMIENTO.extend(preguntas)
     return PREGUNTAS_RECLUTAMIENTO
 
 def cargar_preguntas_desplegables():
     global PREGUNTAS_DESPLEGABLES
     records = sheet_preguntas_desplegables.get_all_records()
-    
-    # SINTAXIS CORREGIDA: Paréntesis y corchetes cerrados correctamente
     preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
     preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
-    
-    # MODIFICAMOS LA LISTA ORIGINAL EN MEMORIA
-    PREGUNTAS_DESPLEGABLES.clear()
-    PREGUNTAS_DESPLEGABLES.extend(preguntas)
+    PREGUNTAS_DESPLEGABLES.clear(); PREGUNTAS_DESPLEGABLES.extend(preguntas)
     return PREGUNTAS_DESPLEGABLES
 
 def cargar_logs_config():
     global CACHE_LOGS
     records = sheet_logs.get_all_records()
-    nuevo_logs = {}
+    nuevo = {}
     for row in records:
-        tipo = row.get('Tipo_Log', '')
-        canal_id = row.get('Canal_ID', '')
-        if tipo and canal_id:
-            try:
-                nuevo_logs[tipo] = int(canal_id)
-            except:
-                pass
-    CACHE_LOGS.clear()
-    CACHE_LOGS.update(nuevo_logs)
+        if row.get('Tipo_Log') and row.get('Canal_ID'):
+            try: nuevo[row.get('Tipo_Log')] = int(row.get('Canal_ID'))
+            except: pass
+    CACHE_LOGS.clear(); CACHE_LOGS.update(nuevo)
     return CACHE_LOGS
 
 def cargar_categorias_config():
     global CACHE_CATEGORIAS
     records = sheet_categorias.get_all_records()
-    nuevo_cats = {}
+    nuevo = {}
     for row in records:
-        tipo = row.get('Tipo', '')
-        cat_id = row.get('Categoria_ID', '')
-        if tipo and cat_id:
-            try:
-                nuevo_cats[tipo] = int(cat_id)
-            except:
-                pass
-    CACHE_CATEGORIAS.clear()
-    CACHE_CATEGORIAS.update(nuevo_cats)
+        if row.get('Tipo') and row.get('Categoria_ID'):
+            try: nuevo[row.get('Tipo')] = int(row.get('Categoria_ID'))
+            except: pass
+    CACHE_CATEGORIAS.clear(); CACHE_CATEGORIAS.update(nuevo)
     return CACHE_CATEGORIAS
 
 def cargar_roles_staff():
     global CACHE_ROLES_STAFF
     records = sheet_roles_staff.get_all_records()
-    nuevos_roles = []
-    for row in records:
-        rol_id = row.get('Rol_ID', '')
-        if rol_id:
-            try:
-                nuevos_roles.append(int(rol_id))
-            except:
-                pass
-    CACHE_ROLES_STAFF.clear()
-    CACHE_ROLES_STAFF.extend(nuevos_roles)
+    nuevos = [int(row.get('Rol_ID')) for row in records if row.get('Rol_ID')]
+    CACHE_ROLES_STAFF.clear(); CACHE_ROLES_STAFF.extend(nuevos)
     return CACHE_ROLES_STAFF
 
 def cargar_roles_auto():
     global CACHE_ROLES_AUTO
     records = sheet_roles_auto.get_all_records()
-    nuevo_auto = {}
+    nuevo = {}
     for row in records:
-        accion = row.get('Accion', '')
-        rol_id = row.get('Rol_ID', '')
-        if accion and rol_id:
-            try:
-                nuevo_auto[accion] = int(rol_id)
-            except:
-                pass
-    CACHE_ROLES_AUTO.clear()
-    CACHE_ROLES_AUTO.update(nuevo_auto)
+        if row.get('Accion') and row.get('Rol_ID'):
+            try: nuevo[row.get('Accion')] = int(row.get('Rol_ID'))
+            except: pass
+    CACHE_ROLES_AUTO.clear(); CACHE_ROLES_AUTO.update(nuevo)
     return CACHE_ROLES_AUTO
 
 def cargar_mensajes_config():
     global CACHE_MENSAJES
     records = sheet_mensajes.get_all_records()
-    nuevo_mensajes = {}
-    for row in records:
-        clave = row.get('Clave', '')
-        valor = row.get('Valor', '')
-        if clave:
-            nuevo_mensajes[clave] = valor
-    CACHE_MENSAJES.clear()
-    CACHE_MENSAJES.update(nuevo_mensajes)
+    nuevo = {row.get('Clave'): row.get('Valor') for row in records if row.get('Clave')}
+    CACHE_MENSAJES.clear(); CACHE_MENSAJES.update(nuevo)
     return CACHE_MENSAJES
-
-# Función helper para enviar logs
-async def enviar_log(tipo_log, mensaje, color):
-    import sys
-    bot = sys.modules['__main__'].bot
-    
-    if not CACHE_LOGS:
-        cargar_logs_config()
-    
-    canal_id = CACHE_LOGS.get(tipo_log)
-    if not canal_id:
-        print(f"⚠️ No hay canal configurado para log: {tipo_log}")
-        return
-    
-    try:
-        canal = bot.get_channel(canal_id)
-        if not canal:
-            canal = await bot.fetch_channel(canal_id)
-        
-        embed = discord.Embed(description=mensaje, color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
-        await canal.send(embed=embed)
-    except Exception as e:
-        print(f"🚨 Error enviando log {tipo_log}: {e}")
-
-# ==========================================
-# NUEVO: Hoja de configuración de embeds
-# ==========================================
-
 
 def cargar_config_embed():
     global CACHE_CONFIG_EMBED
     records = sheet_config_embed.get_all_records()
-    
     CACHE_CONFIG_EMBED = {'ficha': [], 'solicitud': []}
-    
     for row in records:
         tipo = str(row.get('Tipo_Embed', '')).lower()
         if tipo in ['ficha', 'solicitud']:
@@ -266,22 +188,26 @@ def cargar_config_embed():
                     'formato': str(row.get('Formato', 'normal')).lower(),
                     'mostrar': str(row.get('Mostrar', 'SI')).upper() == 'SI'
                 })
-            except:
-                pass
-    
+            except: pass
     for tipo in CACHE_CONFIG_EMBED:
         CACHE_CONFIG_EMBED[tipo].sort(key=lambda x: x['orden'])
-    
     return CACHE_CONFIG_EMBED
 
 def aplicar_formato_texto(texto, formato):
-    """Aplica formato de Discord al texto"""
-    if formato == 'negrita':
-        return f"**{texto}**"
-    elif formato == 'cursiva':
-        return f"*{texto}*"
-    elif formato == 'negrita_cursiva':
-        return f"***{texto}***"
-    elif formato == 'codigo':
-        return f"`{texto}`"
+    if formato == 'negrita': return f"**{texto}**"
+    elif formato == 'cursiva': return f"*{texto}*"
+    elif formato == 'negrita_cursiva': return f"***{texto}***"
+    elif formato == 'codigo': return f"`{texto}`"
     return str(texto)
+
+async def enviar_log(tipo_log, mensaje, color):
+    bot = sys.modules['__main__'].bot
+    if not CACHE_LOGS: cargar_logs_config()
+    canal_id = CACHE_LOGS.get(tipo_log)
+    if not canal_id: return
+    try:
+        canal = bot.get_channel(canal_id) or await bot.fetch_channel(canal_id)
+        embed = discord.Embed(description=mensaje, color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
+        await canal.send(embed=embed)
+    except Exception as e:
+        print(f"🚨 Error enviando log {tipo_log}: {e}")
