@@ -7,6 +7,10 @@ from utils.data import (
     cargar_config_reclutamiento, cargar_preguntas_reclutamiento, cargar_config_embed,
     aplicar_formato_texto, enviar_log
 )
+# ==========================================
+# CONFIGURACIÓN DE FUNCIONALIDADES
+# ==========================================
+ACTIVAR_BOTONES_GESTION = False  # Cambia a True cuando quieras activar los botones de Aceptar/Rechazar/Revisión
 
 # ==========================================
 # MODALES
@@ -107,10 +111,11 @@ class MenuDesplegableView(discord.ui.View):
             opciones = [opt.strip() for opt in str(pregunta.get('Opciones', '')).split(',') if opt.strip()]
             if opciones:
                 select = discord.ui.Select(placeholder=pregunta.get('Pregunta', 'Selecciona...')[:100], options=[discord.SelectOption(label=opt[:100], value=opt[:100]) for opt in opciones[:25]], min_values=1, max_values=1)
-                async def select_callback(interaction: discord.Interaction, select=select, pregunta=pregunta):
-                    await interaction.response.defer(ephemeral=True)
-                    self.respuestas_desplegables[pregunta.get('Pregunta')] = select.values[0]
-                    await interaction.followup.send(f"✅ Seleccionado: {select.values[0]}", ephemeral=True)
+        async def select_callback(interaction: discord.Interaction, select=select, pregunta=pregunta):
+            await interaction.response.defer(ephemeral=True)
+            self.respuestas_desplegables[pregunta.get('Pregunta')] = select.values[0]
+    # Mensaje de confirmación oculto por ahora. Para activarlo, descomenta la siguiente línea:
+    # await interaction.followup.send(f"✅ Seleccionado: {select.values[0]}", ephemeral=True)
                 select.callback = select_callback
                 self.add_item(select)
         btn = discord.ui.Button(label="📝 Continuar con formulario", style=discord.ButtonStyle.primary, custom_id="recluta:continuar")
@@ -133,19 +138,29 @@ class BienvenidaReclutaView(discord.ui.View):
         if not PREGUNTAS_RECLUTAMIENTO: return await interaction.response.send_message("❌ No hay preguntas configuradas.", ephemeral=True)
         await interaction.response.send_modal(FormularioReclutaModal(self.usuario, interaction.channel, {}))
 
+
 class BotonesGestionView(discord.ui.View):
     def __init__(self, usuario_id, canal_ticket):
         super().__init__(timeout=None)
         self.usuario_id = usuario_id
         self.canal_ticket = canal_ticket
+        
+        # Solo añadir los botones si la configuración está activada
+        if ACTIVAR_BOTONES_GESTION:
+            self.add_item(discord.ui.Button(label="✅ Aceptar", style=discord.ButtonStyle.success, custom_id="recluta:aceptar", row=0))
+            self.add_item(discord.ui.Button(label="⏳ En Revisión", style=discord.ButtonStyle.primary, custom_id="recluta:revision", row=0))
+            self.add_item(discord.ui.Button(label="❌ Rechazar", style=discord.ButtonStyle.danger, custom_id="recluta:rechazar", row=0))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if not ACTIVAR_BOTONES_GESTION:
+            return False
         es_staff = any(rol.id in CACHE_ROLES_STAFF for rol in interaction.user.roles)
         if not (es_staff or interaction.user.guild_permissions.administrator):
             await interaction.response.send_message("❌ No tienes permisos.", ephemeral=True)
             return False
         return True
 
+    # Mantenemos los métodos por si los activas más tarde
     @discord.ui.button(label="✅ Aceptar", style=discord.ButtonStyle.success, custom_id="recluta:aceptar")
     async def aceptar(self, interaction: discord.Interaction, button: discord.ui.Button):
         usuario = interaction.guild.get_member(self.usuario_id)
@@ -163,6 +178,7 @@ class BotonesGestionView(discord.ui.View):
         usuario = interaction.guild.get_member(self.usuario_id)
         if not usuario: return await interaction.response.send_message("❌ Usuario no encontrado.", ephemeral=True)
         await interaction.response.send_message(f"¿Confirmas **RECHAZAR** a {usuario.mention}?", view=ConfirmarAccionView("rechazar", usuario, self.canal_ticket), ephemeral=True)
+
 
 class ConfirmarAccionView(discord.ui.View):
     def __init__(self, accion, usuario, canal_ticket):
@@ -316,8 +332,8 @@ async def construir_y_enviar_embed(interaction, todas_las_respuestas, respuestas
             nombre_limpio = ''.join(e for e in nombre_limpio if e.isalnum() or e == '-')
             nombre_limpio = nombre_limpio[:20] # Límite de seguridad
             
-            await interaction.channel.edit(name=f"ficha-{nombre_limpio}")
-            print(f"✅ Canal renombrado a: ficha-{nombre_limpio}")
+            await interaction.channel.edit(name=f"⏳-{nombre_limpio}")
+            print(f"✅ Canal renombrado a: ⏳-{nombre_limpio}")
         except Exception as e:
             print(f"⚠️ Error al renombrar canal: {e}")
     
