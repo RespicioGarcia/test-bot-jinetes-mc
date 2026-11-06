@@ -119,6 +119,8 @@ def cargar_config_reclutamiento():
 def cargar_preguntas_reclutamiento():
     global PREGUNTAS_RECLUTAMIENTO
     records = sheet_recluta_preguntas.get_all_records()
+    
+    # SINTAXIS CORREGIDA: Paréntesis y corchetes cerrados correctamente
     preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
     preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
     
@@ -130,6 +132,8 @@ def cargar_preguntas_reclutamiento():
 def cargar_preguntas_desplegables():
     global PREGUNTAS_DESPLEGABLES
     records = sheet_preguntas_desplegables.get_all_records()
+    
+    # SINTAXIS CORREGIDA: Paréntesis y corchetes cerrados correctamente
     preguntas = [r for r in records if str(r.get('Orden', '')).strip().isdigit() and int(str(r.get('Orden', '')).strip()) > 0]
     preguntas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip()))
     
