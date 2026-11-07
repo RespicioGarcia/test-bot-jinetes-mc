@@ -209,5 +209,81 @@ async def enviar_log(tipo_log, mensaje, color):
         canal = bot.get_channel(canal_id) or await bot.fetch_channel(canal_id)
         embed = discord.Embed(description=mensaje, color=color, timestamp=datetime.datetime.now(datetime.timezone.utc))
         await canal.send(embed=embed)
+        
     except Exception as e:
         print(f"🚨 Error enviando log {tipo_log}: {e}")
+
+# ==========================================
+# SISTEMA DE DISPUTAS DE ZONAS
+# ==========================================
+import time as _time
+
+sheet_disputas_zonas = spreadsheet.worksheet("Config_Disputas_Zonas")
+sheet_disputas_general = spreadsheet.worksheet("Config_Disputas_General")
+sheet_registro_disputas = spreadsheet.worksheet("Registro_Disputas")
+
+CACHE_DISPUTAS_ZONAS = []
+CACHE_DISPUTAS_GENERAL = {}
+ALARMAS_PROGRAMADAS = []
+
+def cargar_disputas_zonas():
+    global CACHE_DISPUTAS_ZONAS
+    records = sheet_disputas_zonas.get_all_records()
+    zonas = [r for r in records if str(r.get('Activo', '')).upper() == 'SI']
+    zonas.sort(key=lambda x: int(str(x.get('Orden', '0')).strip() or 0))
+    CACHE_DISPUTAS_ZONAS.clear()
+    CACHE_DISPUTAS_ZONAS.extend(zonas)
+    return CACHE_DISPUTAS_ZONAS
+
+def cargar_disputas_general():
+    global CACHE_DISPUTAS_GENERAL
+    records = sheet_disputas_general.get_all_records()
+    nuevo = {}
+    for row in records:
+        clave = next((k for k in row.keys() if 'clave' in k.lower()), None)
+        valor = next((k for k in row.keys() if 'valor' in k.lower()), None)
+        if clave and valor:
+            nuevo[str(row[clave])] = str(row[valor])
+    CACHE_DISPUTAS_GENERAL.clear()
+    CACHE_DISPUTAS_GENERAL.update(nuevo)
+    return CACHE_DISPUTAS_GENERAL
+
+def registrar_disputa(fecha, hora, zona, resultado, org_ganadora, alarma, alarma_dispara, usuario):
+    id_unico = f"{int(_time.time())}-{usuario.id}"
+    fila = [fecha, hora, zona, resultado, org_ganadora, alarma, usuario.display_name, alarma_dispara, "NO", id_unico]
+    sheet_registro_disputas.append_row(fila, value_input_option='USER_ENTERED')
+    return id_unico
+
+def marcar_alarma_enviada(id_unico):
+    try:
+        records = sheet_registro_disputas.get_all_records()
+        for i, row in enumerate(records, start=2):
+            if str(row.get('ID', '')) == str(id_unico):
+                sheet_registro_disputas.update_cell(i, 9, "SI")
+                return True
+    except Exception as e:
+        print(f"🚨 Error marcando alarma: {e}")
+    return False
+
+def cargar_alarmas_pendientes():
+    """Recupera alarmas del Excel al reiniciar el bot (anti-pérdida de datos)"""
+    global ALARMAS_PROGRAMADAS
+    records = sheet_registro_disputas.get_all_records()
+    ahora = datetime.datetime.now()
+    pendientes = []
+    for row in records:
+        if str(row.get('Alarma_Enviada', 'NO')).upper() == 'NO' and row.get('Alarma_Dispara', ''):
+            try:
+                dispara = datetime.datetime.strptime(str(row.get('Alarma_Dispara')), '%d/%m/%Y %H:%M')
+                if dispara > ahora:
+                    pendientes.append({
+                        'id': str(row.get('ID', '')),
+                        'dispara': dispara,
+                        'zona': str(row.get('Zona', '')),
+                        'usuario': str(row.get('Usuario', ''))
+                    })
+            except Exception:
+                pass
+    ALARMAS_PROGRAMADAS.clear()
+    ALARMAS_PROGRAMADAS.extend(pendientes)
+    return ALARMAS_PROGRAMADAS
