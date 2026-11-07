@@ -1,11 +1,13 @@
 import discord
 from discord.ext import commands, tasks
 import datetime
+import asyncio
+import traceback
 
 from utils.data import (
     CACHE_DISPUTAS_ZONAS, CACHE_DISPUTAS_GENERAL, ALARMAS_PROGRAMADAS,
     cargar_disputas_zonas, cargar_disputas_general,
-    sheet_registro_disputas, registrar_disputa,
+    registrar_disputa, leer_disputas,
     cargar_alarmas_pendientes, marcar_alarma_enviada
 )
 
