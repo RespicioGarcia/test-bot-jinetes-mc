@@ -248,15 +248,64 @@ def cargar_disputas_general():
     CACHE_DISPUTAS_GENERAL.update(nuevo)
     return CACHE_DISPUTAS_GENERAL
 
+# Mapeo fijo por posición de columna (1=Fecha ... 10=ID)
+DISPUTAS_COLS = {
+    'Fecha': 0, 'Hora': 1, 'Zona': 2, 'Resultado': 3, 'Org_Ganadora': 4,
+    'Alarma': 5, 'Usuario': 6, 'Alarma_Dispara': 7, 'Alarma_Enviada': 8, 'ID': 9
+}
+
+def leer_disputas():
+    """Lee el registro por posición de columna. No depende de los encabezados."""
+    valores = sheet_registro_disputas.get_all_values()
+    registros = []
+    for fila in valores[1:]:
+        if not any(str(c).strip() for c in fila):
+            continue
+        reg = {}
+        for nombre, idx in DISPUTAS_COLS.items():
+            reg[nombre] = str(fila[idx]).strip() if idx < len(fila) else ''
+        registros.append(reg)
+    return registros
+
 def asegurar_cabeceras_disputas():
-    """Escribe los encabezados si la hoja está vacía (incluye H, I y J que faltaban)"""
     cabeceras = ["Fecha", "Hora", "Zona", "Resultado", "Org_Ganadora", "Alarma", "Usuario", "Alarma_Dispara", "Alarma_Enviada", "ID"]
     try:
         valores = sheet_registro_disputas.get_all_values()
-        if not valores:
+        if not valores or [str(c).strip() for c in valores[0][:10]] != cabeceras:
             sheet_registro_disputas.update('A1:J1', [cabeceras], value_input_option='RAW')
     except Exception as e:
         print(f"🚨 Error asegurando cabeceras: {e}")
+
+def cargar_alarmas_pendientes():
+    global ALARMAS_PROGRAMADAS
+    ahora = datetime.datetime.now()
+    pendientes = []
+    try:
+        for row in leer_disputas():
+            if row['Alarma_Enviada'].upper() == 'NO' and row['Alarma_Dispara']:
+                try:
+                    dispara = datetime.datetime.strptime(row['Alarma_Dispara'], '%d/%m/%Y %H:%M')
+                    if dispara > ahora:
+                        pendientes.append({'id': row['ID'], 'dispara': dispara, 'zona': row['Zona'], 'usuario': row['Usuario']})
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"🚨 Error cargando alarmas pendientes: {e}")
+    ALARMAS_PROGRAMADAS.clear()
+    ALARMAS_PROGRAMADAS.extend(pendientes)
+    return ALARMAS_PROGRAMADAS
+
+def marcar_alarma_enviada(id_unico):
+    try:
+        valores = sheet_registro_disputas.get_all_values()
+        for i, fila in enumerate(valores, start=1):
+            if len(fila) >= 10 and str(fila[9]).strip() == str(id_unico).strip():
+                sheet_registro_disputas.update_cell(i, 9, "SI")
+                return True
+    except Exception as e:
+        print(f"🚨 Error marcando alarma: {e}")
+    return False
+
 
 def registrar_disputa(fecha, hora, zona, resultado, org_ganadora, alarma, alarma_dispara, usuario):
     id_unico = f"{int(_time.time())}-{usuario.id}"
@@ -271,36 +320,3 @@ def registrar_disputa(fecha, hora, zona, resultado, org_ganadora, alarma, alarma
         sheet_registro_disputas.append_row(fila, value_input_option='USER_ENTERED')
     return id_unico
 
-def marcar_alarma_enviada(id_unico):
-    try:
-        records = sheet_registro_disputas.get_all_records()
-        for i, row in enumerate(records, start=2):
-            if str(row.get('ID', '')) == str(id_unico):
-                sheet_registro_disputas.update_cell(i, 9, "SI")
-                return True
-    except Exception as e:
-        print(f"🚨 Error marcando alarma: {e}")
-    return False
-
-def cargar_alarmas_pendientes():
-    """Recupera alarmas del Excel al reiniciar el bot (anti-pérdida de datos)"""
-    global ALARMAS_PROGRAMADAS
-    records = sheet_registro_disputas.get_all_records()
-    ahora = datetime.datetime.now()
-    pendientes = []
-    for row in records:
-        if str(row.get('Alarma_Enviada', 'NO')).upper() == 'NO' and row.get('Alarma_Dispara', ''):
-            try:
-                dispara = datetime.datetime.strptime(str(row.get('Alarma_Dispara')), '%d/%m/%Y %H:%M')
-                if dispara > ahora:
-                    pendientes.append({
-                        'id': str(row.get('ID', '')),
-                        'dispara': dispara,
-                        'zona': str(row.get('Zona', '')),
-                        'usuario': str(row.get('Usuario', ''))
-                    })
-            except Exception:
-                pass
-    ALARMAS_PROGRAMADAS.clear()
-    ALARMAS_PROGRAMADAS.extend(pendientes)
-    return ALARMAS_PROGRAMADAS
