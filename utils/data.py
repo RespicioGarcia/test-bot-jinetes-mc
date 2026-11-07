@@ -248,10 +248,27 @@ def cargar_disputas_general():
     CACHE_DISPUTAS_GENERAL.update(nuevo)
     return CACHE_DISPUTAS_GENERAL
 
+def asegurar_cabeceras_disputas():
+    """Escribe los encabezados si la hoja está vacía (incluye H, I y J que faltaban)"""
+    cabeceras = ["Fecha", "Hora", "Zona", "Resultado", "Org_Ganadora", "Alarma", "Usuario", "Alarma_Dispara", "Alarma_Enviada", "ID"]
+    try:
+        valores = sheet_registro_disputas.get_all_values()
+        if not valores:
+            sheet_registro_disputas.update('A1:J1', [cabeceras], value_input_option='RAW')
+    except Exception as e:
+        print(f"🚨 Error asegurando cabeceras: {e}")
+
 def registrar_disputa(fecha, hora, zona, resultado, org_ganadora, alarma, alarma_dispara, usuario):
     id_unico = f"{int(_time.time())}-{usuario.id}"
     fila = [fecha, hora, zona, resultado, org_ganadora, alarma, usuario.display_name, alarma_dispara, "NO", id_unico]
-    sheet_registro_disputas.append_row(fila, value_input_option='USER_ENTERED')
+    try:
+        # Calculamos la siguiente fila vacía y escribimos en rango FIJO A:J
+        todas = sheet_registro_disputas.get_all_values()
+        siguiente_fila = len(todas) + 1
+        sheet_registro_disputas.update(f'A{siguiente_fila}:J{siguiente_fila}', [fila], value_input_option='USER_ENTERED')
+    except Exception as e:
+        print(f"🚨 Error registrando disputa: {e}")
+        sheet_registro_disputas.append_row(fila, value_input_option='USER_ENTERED')
     return id_unico
 
 def marcar_alarma_enviada(id_unico):
