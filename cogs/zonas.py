@@ -157,7 +157,7 @@ class ZonasCog(commands.Cog):
     @commands.hybrid_command(name="taimeo", description="Ver historial de disputas")
     async def taimeo(self, ctx):
         await ctx.defer(ephemeral=True)
-        records = sheet_registro_disputas.get_all_records()
+        records = leer_disputas()
         if not records:
             return await ctx.send("📭 No hay disputas registradas todavía.", ephemeral=True)
         
