@@ -206,4 +206,11 @@ class ZonasCog(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(ZonasCog(bot))
+    try:
+        from utils.data import asegurar_cabeceras_disputas
+        asegurar_cabeceras_disputas()
+        await bot.add_cog(ZonasCog(bot))
+        print("✅ Cog zonas cargado correctamente")
+    except Exception as e:
+        print(f"❌ Error cargando cog zonas: {e}")
+        traceback.print_exc()
